@@ -5,29 +5,77 @@ export function ModalConfirmacionPedido({
   total, 
   onConfirmar, 
   onCancelar,
-  loading = false 
+  loading = false,
+  isPWA = false,
+  isOnline = true
 }) {
   if (!mostrar) return null;
 
+  // ✅ FUNCIÓN PARA OBTENER MENSAJE SEGÚN MODO
+  const getMensajeConfirmacion = () => {
+    if (!isPWA) {
+      return `¿Deseas confirmar el pedido para el cliente ${cliente?.nombre} con una cantidad de ${totalProductos} productos y un total de $${Number(total).toFixed(2)}?`;
+    }
+    
+    if (isOnline) {
+      return `¿Deseas confirmar el pedido para el cliente ${cliente?.nombre} con una cantidad de ${totalProductos} productos y un total de $${Number(total).toFixed(2)}?`;
+    } else {
+      return `¿Deseas guardar offline el pedido para el cliente ${cliente?.nombre} con una cantidad de ${totalProductos} productos y un total de $${Number(total).toFixed(2)}? Se subirá cuando haya conexión.`;
+    }
+  };
+
+  // ✅ FUNCIÓN PARA OBTENER ESTILO DEL MODAL
+  const getModalStyle = () => {
+    if (!isPWA) return '';
+    return isOnline ? 'border-l-4 border-green-500' : 'border-l-4 border-orange-500';
+  };
+
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <h3 className="text-xl font-bold mb-4 text-center">Confirmar Pedido</h3>
-        <div className="text-center mb-6">
-          <p className="mb-2">
-            ¿Deseas confirmar el pedido para el cliente{' '}
-            <span className="font-bold">{cliente?.nombre}</span> con una cantidad de{' '}
-            <span className="font-bold">{totalProductos}</span> productos y un total de{' '}
-            <span className="font-bold text-green-700">${Number(total).toFixed(2)}</span>?
-          </p>
+      <div className={`bg-white rounded-lg p-6 max-w-md w-full mx-4 ${getModalStyle()}`}>
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-bold text-center">
+            {isPWA && !isOnline ? 'Guardar Pedido Offline' : 'Confirmar Pedido'}
+          </h3>
+          
+          {/* ✅ INDICADOR DE MODO PWA */}
+          {isPWA && (
+            <div className="flex items-center gap-2">
+              <div className={`w-3 h-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-orange-500'}`}></div>
+              <span className={`text-sm font-medium ${isOnline ? 'text-green-700' : 'text-orange-700'}`}>
+                {isOnline ? 'ONLINE' : 'OFFLINE'}
+              </span>
+            </div>
+          )}
         </div>
         
-        {/* ✅ INDICADOR DE PROCESAMIENTO */}
+        <div className="text-center mb-6">
+          <p className="mb-2">{getMensajeConfirmacion()}</p>
+          
+          {/* ✅ INFORMACIÓN ADICIONAL PARA PWA OFFLINE */}
+          {isPWA && !isOnline && (
+            <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+              <div className="text-sm text-orange-800">
+                <strong>📱 Modo Offline:</strong> El pedido se guardará localmente y se sincronizará automáticamente cuando se recupere la conexión a internet.
+              </div>
+            </div>
+          )}
+        </div>
+        
+        {/* ✅ INDICADOR DE PROCESAMIENTO MEJORADO */}
         {loading && (
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className={`mb-4 p-3 border rounded-lg ${
+            isPWA && !isOnline 
+              ? 'bg-orange-50 border-orange-200' 
+              : 'bg-blue-50 border-blue-200'
+          }`}>
             <div className="flex items-center justify-center">
-              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mr-3"></div>
-              <span className="text-blue-700 font-medium">Procesando pedido...</span>
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 mr-3 border-current"></div>
+              <span className={`font-medium ${
+                isPWA && !isOnline ? 'text-orange-700' : 'text-blue-700'
+              }`}>
+                {isPWA && !isOnline ? 'Guardando offline...' : 'Procesando pedido...'}
+              </span>
             </div>
           </div>
         )}
@@ -36,12 +84,22 @@ export function ModalConfirmacionPedido({
           <button
             onClick={onConfirmar}
             disabled={loading}
-            className="bg-green-600 hover:bg-green-700 disabled:bg-green-400 disabled:cursor-not-allowed text-white px-6 py-2 rounded font-semibold transition-colors flex items-center gap-2"
+            className={`px-6 py-2 rounded font-semibold transition-colors flex items-center gap-2 ${
+              loading
+                ? 'bg-gray-400 cursor-not-allowed text-gray-700'
+                : isPWA && !isOnline
+                  ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                  : 'bg-green-600 hover:bg-green-700 text-white'
+            }`}
           >
             {loading && (
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
             )}
-            {loading ? 'Procesando...' : 'Sí, Confirmar'}
+            {loading ? (
+              isPWA && !isOnline ? 'Guardando...' : 'Procesando...'
+            ) : (
+              isPWA && !isOnline ? '📱 Sí, Guardar Offline' : 'Sí, Confirmar'
+            )}
           </button>
           <button
             onClick={onCancelar}
@@ -55,7 +113,6 @@ export function ModalConfirmacionPedido({
     </div>
   );
 }
-
 export function ModalConfirmacionSalidaPedidos({ mostrar, onConfirmar, onCancelar }) {
   if (!mostrar) return null;
 

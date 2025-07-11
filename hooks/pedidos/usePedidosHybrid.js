@@ -1,3 +1,4 @@
+// hooks/pedidos/usePedidosHybrid.js - VERSIÓN CORREGIDA
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { axiosAuth } from '../../utils/apiClient';
@@ -30,6 +31,46 @@ export function usePedidosHybrid() {
       if (navigator.onLine) {
         try {
           const response = await axiosAuth.get(`/pedidos/filtrar-cliente?q=${encodeURIComponent(query)}`);
+          return response.data.success ? response.data.data : [];
+        } catch (error) {
+          console.error('❌ PWA: Error en búsqueda online de clientes:', error);
+          return resultadosOffline; // Devolver offline aunque sea vacío
+        }
+      }
+      
+      return resultadosOffline;
+    }
+
+    // Modo Web: Online directo
+    try {
+      const response = await axiosAuth.get(`/pedidos/filtrar-cliente?q=${encodeURIComponent(query)}`);
+      return response.data.success ? response.data.data : [];
+    } catch (error) {
+      console.error('🌐 Web: Error buscando clientes:', error);
+      toast.error('Error al buscar clientes');
+      return [];
+    }
+  };
+
+  // ✅ BUSCAR PRODUCTOS HÍBRIDO
+  const buscarProductos = async (query) => {
+    if (!query || query.trim().length < 2) {
+      return [];
+    }
+
+    // Modo PWA: Offline first
+    if (appMode === 'pwa') {
+      const resultadosOffline = offlineManager.buscarProductosOffline(query);
+      
+      if (resultadosOffline.length > 0) {
+        console.log(`📱 PWA: Búsqueda offline de productos: ${resultadosOffline.length} resultados`);
+        return resultadosOffline;
+      }
+      
+      // Si no hay resultados offline, intentar online como fallback
+      if (navigator.onLine) {
+        try {
+          const response = await axiosAuth.get(`/pedidos/filtrar-producto?q=${encodeURIComponent(query)}`);
           return response.data.success ? response.data.data : [];
         } catch (error) {
           console.error('❌ PWA: Error en búsqueda online de productos:', error);
@@ -311,7 +352,7 @@ export function usePedidosHybrid() {
     pedidos,
     appMode,
     
-    // Funciones de búsqueda híbridas
+    // ✅ FUNCIONES DE BÚSQUEDA HÍBRIDAS (CORREGIDAS)
     buscarClientes,
     buscarProductos,
     
@@ -331,4 +372,4 @@ export function usePedidosHybrid() {
     isPWA: appMode === 'pwa',
     isWeb: appMode === 'web'
   };
-} 
+}

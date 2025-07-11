@@ -332,6 +332,189 @@ class OfflineManager {
       )
     ]);
   }
+
+  async updateLocalStock(productoId, cantidadRestar) {
+  try {
+    if (!isClient()) return false;
+    
+    const productos = this.getProductos();
+    const productoIndex = productos.findIndex(p => p.id === productoId);
+    
+    if (productoIndex === -1) {
+      console.warn(`Producto ${productoId} no encontrado en stock local`);
+      return false;
+    }
+    
+    const stockActual = productos[productoIndex].stock_actual;
+    const nuevoStock = Math.max(0, stockActual - cantidadRestar);
+    
+    productos[productoIndex].stock_actual = nuevoStock;
+    
+    // Guardar productos actualizados
+    const success = await this.saveProductos(productos);
+    
+    if (success) {
+      console.log(`📦 Stock local actualizado - Producto ${productoId}: ${stockActual} → ${nuevoStock}`);
+    }
+    
+    return success;
+  } catch (error) {
+    console.error('❌ Error actualizando stock local:', error);
+    return false;
+  }
+}
+
+// ✅ RESTAURAR STOCK LOCAL AL ANULAR PEDIDO
+async restoreLocalStock(productoId, cantidadRestaurar) {
+  try {
+    if (!isClient()) return false;
+    
+    const productos = this.getProductos();
+    const productoIndex = productos.findIndex(p => p.id === productoId);
+    
+    if (productoIndex === -1) {
+      console.warn(`Producto ${productoId} no encontrado en stock local`);
+      return false;
+    }
+    
+    const stockActual = productos[productoIndex].stock_actual;
+    const nuevoStock = stockActual + cantidadRestaurar;
+    
+    productos[productoIndex].stock_actual = nuevoStock;
+    
+    // Guardar productos actualizados
+    const success = await this.saveProductos(productos);
+    
+    if (success) {
+      console.log(`📦 Stock local restaurado - Producto ${productoId}: ${stockActual} → ${nuevoStock}`);
+    }
+    
+    return success;
+  } catch (error) {
+    console.error('❌ Error restaurando stock local:', error);
+    return false;
+  }
+}
+
+// ✅ PROCESAR STOCK PARA MÚLTIPLES PRODUCTOS
+async updateMultipleLocalStock(productos) {
+  try {
+    let exitosos = 0;
+    let fallidos = 0;
+    
+    for (const producto of productos) {
+      const success = await this.updateLocalStock(producto.id, producto.cantidad);
+      if (success) {
+        exitosos++;
+      } else {
+        fallidos++;
+      }
+    }
+    
+    console.log(`📦 Stock múltiple actualizado: ${exitosos} exitosos, ${fallidos} fallidos`);
+    return { exitosos, fallidos };
+  } catch (error) {
+    console.error('❌ Error actualizando stock múltiple:', error);
+    return { exitosos: 0, fallidos: productos.length };
+  }
+}
+
+// ✅ VERIFICAR CONSISTENCIA DE STOCK
+checkStockConsistency() {
+  try {
+    if (!isClient()) return null;
+    
+    const productos = this.getProductos();
+    const stockProblems = [];
+    
+    productos.forEach(producto => {
+      if (producto.stock_actual < 0) {
+        stockProblems.push({
+          id: producto.id,
+          nombre: producto.nombre,
+          stockActual: producto.stock_actual,
+          problema: 'Stock negativo'
+        });
+      }
+      
+      if (typeof producto.stock_actual !== 'number') {
+        stockProblems.push({
+          id: producto.id,
+          nombre: producto.nombre,
+          stockActual: producto.stock_actual,
+          problema: 'Stock no numérico'
+        });
+      }
+    });
+    
+    return {
+      totalProductos: productos.length,
+      problemasEncontrados: stockProblems.length,
+      problemas: stockProblems
+    };
+  } catch (error) {
+    console.error('❌ Error verificando consistencia de stock:', error);
+    return null;
+  }
+}
+
+// ✅ FUNCIÓN PARA FORZAR ACTUALIZACIÓN DE CATÁLOGO
+async forceUpdateCatalog() {
+  try {
+    console.log('🔄 Forzando actualización de catálogo...');
+    
+    // Limpiar datos antiguos
+    this.clearOfflineData();
+    
+    // Recargar página para obtener datos frescos
+    if (isClient() && navigator.onLine) {
+      window.location.reload();
+      return { success: true, method: 'reload' };
+    }
+    
+    return { success: false, error: 'Sin conexión' };
+  } catch (error) {
+    console.error('❌ Error forzando actualización:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+// ✅ OBTENER MÉTRICAS DETALLADAS
+getDetailedMetrics() {
+  try {
+    if (!isClient()) return null;
+    
+    const clientes = this.getClientes();
+    const productos = this.getProductos();
+    const pedidosPendientes = this.getPedidosPendientes();
+    const lastSync = this.getLastSync();
+    const stockConsistency = this.checkStockConsistency();
+    
+    return {
+      catalogo: {
+        clientes: clientes.length,
+        productos: productos.length,
+        ultimaActualizacion: lastSync.catalogo ? new Date(lastSync.catalogo).toLocaleString() : 'Nunca',
+        diasSinActualizar: lastSync.catalogo ? Math.floor((Date.now() - lastSync.catalogo) / (1000 * 60 * 60 * 24)) : null
+      },
+      pedidos: {
+        pendientes: pedidosPendientes.length,
+        ultimoIntento: pedidosPendientes.length > 0 ? pedidosPendientes[0].ultimoIntento : null,
+        totalValor: pedidosPendientes.reduce((acc, p) => acc + parseFloat(p.total || 0), 0)
+      },
+      stock: stockConsistency,
+      storage: this.calculateStorageUsage(),
+      health: {
+        catalogoActualizado: lastSync.catalogo && (Date.now() - lastSync.catalogo) < 24 * 60 * 60 * 1000,
+        sinPedidosPendientes: pedidosPendientes.length === 0,
+        stockConsistente: stockConsistency?.problemasEncontrados === 0
+      }
+    };
+  } catch (error) {
+    console.error('❌ Error obteniendo métricas:', error);
+    return null;
+  }
+}
 }
 
 // ✅ EXPORTAR INSTANCIA SINGLETON

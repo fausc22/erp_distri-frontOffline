@@ -1,11 +1,14 @@
-// hooks/useBusquedaHybrid.js - Hook híbrido para búsqueda de clientes PWA/Web
+// hooks/useProductoSearchHybrid.js - Hook híbrido para búsqueda de productos PWA/Web
 import { useState, useEffect } from 'react';
 import { useOfflineCatalog } from './useOfflineCatalog';
 import { getAppMode } from '../utils/offlineManager';
 
-export function useClienteSearchHybrid() {
+export function useProductoSearchHybrid() {
   const [busqueda, setBusqueda] = useState('');
   const [resultados, setResultados] = useState([]);
+  const [productoSeleccionado, setProductoSeleccionado] = useState(null);
+  const [cantidad, setCantidad] = useState(1);
+  const [subtotal, setSubtotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [mostrarModal, setMostrarModal] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
@@ -14,7 +17,7 @@ export function useClienteSearchHybrid() {
   const isPWA = appMode === 'pwa';
 
   // Hook del catálogo offline
-  const { buscarClientes } = useOfflineCatalog();
+  const { buscarProductos } = useOfflineCatalog();
 
   // ✅ MONITOREAR CONECTIVIDAD SOLO EN PWA
   useEffect(() => {
@@ -34,31 +37,47 @@ export function useClienteSearchHybrid() {
     }
   }, [isPWA]);
 
-  // ✅ BÚSQUEDA HÍBRIDA DE CLIENTES
-  const buscarCliente = async () => {
+  // ✅ BÚSQUEDA HÍBRIDA DE PRODUCTOS
+  const buscarProducto = async () => {
     if (!busqueda.trim()) return;
 
     setLoading(true);
     try {
-      console.log(`🔍 Buscando clientes en modo ${appMode}:`, busqueda);
+      console.log(`🔍 Buscando productos en modo ${appMode}:`, busqueda);
       
-      const resultados = await buscarClientes(busqueda);
+      const resultados = await buscarProductos(busqueda);
       
       setResultados(resultados);
       setMostrarModal(true);
       
-      console.log(`✅ Clientes encontrados: ${resultados.length}`);
+      console.log(`✅ Productos encontrados: ${resultados.length}`);
     } catch (error) {
-      console.error('❌ Error buscando clientes:', error);
+      console.error('❌ Error buscando productos:', error);
       setResultados([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const limpiarBusqueda = () => {
+  const seleccionarProducto = (producto) => {
+    setProductoSeleccionado(producto);
+    setCantidad(1);
+    setSubtotal(parseFloat(Number(producto.precio).toFixed(2)));
+  };
+
+  const actualizarCantidad = (nuevaCantidad) => {
+    const cantidadValida = Math.max(1, nuevaCantidad);
+    setCantidad(cantidadValida);
+    if (productoSeleccionado) {
+      setSubtotal(parseFloat((productoSeleccionado.precio * cantidadValida).toFixed(2)));
+    }
+  };
+
+  const limpiarSeleccion = () => {
+    setProductoSeleccionado(null);
+    setCantidad(1);
+    setSubtotal(0);
     setBusqueda('');
-    setResultados([]);
     setMostrarModal(false);
   };
 
@@ -67,6 +86,9 @@ export function useClienteSearchHybrid() {
     busqueda,
     setBusqueda,
     resultados,
+    productoSeleccionado,
+    cantidad,
+    subtotal,
     loading,
     mostrarModal,
     setMostrarModal,
@@ -74,7 +96,9 @@ export function useClienteSearchHybrid() {
     isOnline,
     
     // Funciones
-    buscarCliente,
-    limpiarBusqueda
+    buscarProducto,
+    seleccionarProducto,
+    actualizarCantidad,
+    limpiarSeleccion
   };
 }

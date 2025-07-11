@@ -1,5 +1,5 @@
 // components/pedidos/SelectorClientesHybrid.jsx - Selector Híbrido PWA/Web
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MdSearch, MdDeleteForever, MdKeyboardArrowDown, MdKeyboardArrowUp, MdWifi, MdWifiOff } from "react-icons/md";
 import { usePedidosContext } from '../../context/PedidosContext';
 import { useClienteSearchHybrid } from '../../hooks/useBusquedaHybrid';
