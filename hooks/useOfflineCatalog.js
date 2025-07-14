@@ -1,4 +1,4 @@
-// hooks/useOfflineCatalog.js - VERSIÓN MEJORADA para Catálogo Completo
+// hooks/useOfflineCatalog.js - VERSIÓN COMPLETA CORREGIDA
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
 import { offlineManager, getAppMode } from '../utils/offlineManager';
@@ -335,5 +335,120 @@ export function useOfflineCatalog() {
     checkIfNeedsUpdate,
     hasCatalogComplete,
     getCatalogInfo
+  };
+}
+
+// ✅ HOOK ESPECÍFICO PARA PEDIDOS OFFLINE
+export function useOfflinePedidos() {
+  const [pedidosPendientes, setPedidosPendientes] = useState([]);
+  const [syncing, setSyncing] = useState(false);
+
+  const isPWA = getAppMode() === 'pwa';
+
+  useEffect(() => {
+    if (isPWA) {
+      loadPedidosPendientes();
+    }
+  }, [isPWA]);
+
+  const loadPedidosPendientes = () => {
+    const pedidos = offlineManager.getPedidosPendientes();
+    setPedidosPendientes(pedidos);
+  };
+
+  // ✅ GUARDAR PEDIDO OFFLINE
+  const savePedidoOffline = async (pedidoData) => {
+    const tempId = await offlineManager.savePedidoPendiente(pedidoData);
+    
+    if (tempId) {
+      loadPedidosPendientes();
+      toast.success('Pedido guardado offline');
+      return { success: true, tempId };
+    }
+    
+    toast.error('Error al guardar pedido offline');
+    return { success: false };
+  };
+
+  // ✅ SINCRONIZAR PEDIDOS PENDIENTES
+  const syncPedidosPendientes = async () => {
+    if (!navigator.onLine) {
+      toast.error('Sin conexión para sincronizar');
+      return { success: false, error: 'Sin conexión' };
+    }
+
+    if (pedidosPendientes.length === 0) {
+      toast.info('No hay pedidos pendientes');
+      return { success: true, count: 0 };
+    }
+
+    setSyncing(true);
+    let exitosos = 0;
+    let fallidos = 0;
+
+    try {
+      for (const pedido of pedidosPendientes) {
+        try {
+          console.log(`🔄 Sincronizando pedido ${pedido.tempId}...`);
+          
+          // Remover campos temporales
+          const { tempId, fechaCreacion, estado, intentos, ultimoError, ultimoIntento, ...pedidoData } = pedido;
+          
+          const response = await axiosAuth.post('/pedidos/registrar-pedido', pedidoData);
+          
+          if (response.data.success) {
+            offlineManager.removePedidoPendiente(tempId);
+            exitosos++;
+            console.log(`✅ Pedido ${tempId} sincronizado exitosamente`);
+          } else {
+            offlineManager.markPedidoAsFailed(tempId, response.data.message);
+            fallidos++;
+          }
+          
+        } catch (error) {
+          console.error(`❌ Error sincronizando pedido ${pedido.tempId}:`, error);
+          offlineManager.markPedidoAsFailed(pedido.tempId, error.message);
+          fallidos++;
+        }
+      }
+
+      loadPedidosPendientes();
+
+      if (exitosos > 0) {
+        toast.success(`${exitosos} pedidos sincronizados correctamente`);
+      }
+
+      if (fallidos > 0) {
+        toast.error(`${fallidos} pedidos no se pudieron sincronizar`);
+      }
+
+      return { 
+        success: exitosos > 0, 
+        exitosos, 
+        fallidos, 
+        total: pedidosPendientes.length 
+      };
+
+    } catch (error) {
+      console.error('❌ Error en sincronización:', error);
+      toast.error('Error durante la sincronización');
+      return { success: false, error: error.message };
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  return {
+    // Estados
+    pedidosPendientes,
+    syncing,
+    hasPendientes: pedidosPendientes.length > 0,
+    cantidadPendientes: pedidosPendientes.length,
+    isPWA,
+
+    // Funciones
+    savePedidoOffline,
+    syncPedidosPendientes,
+    loadPedidosPendientes
   };
 }
