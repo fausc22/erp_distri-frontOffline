@@ -1,4 +1,4 @@
-// hooks/pedidos/usePedidosHybrid.js - VERSIÓN CORREGIDA
+// hooks/pedidos/usePedidosHybrid.js - VERSIÓN MEJORADA con timeout de 8-10 segundos
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { axiosAuth } from '../../utils/apiClient';
@@ -12,13 +12,13 @@ export function usePedidosHybrid() {
   const appMode = getAppMode();
   const { updateCatalogSilently } = useOfflineCatalog();
 
-  // ✅ BUSCAR CLIENTES HÍBRIDO
+  // ✅ BUSCAR CLIENTES HÍBRIDO (Usa el nuevo sistema de catálogo completo)
   const buscarClientes = async (query) => {
     if (!query || query.trim().length < 2) {
       return [];
     }
 
-    // Modo PWA: Offline first
+    // Modo PWA: Offline first con catálogo completo
     if (appMode === 'pwa') {
       const resultadosOffline = offlineManager.buscarClientesOffline(query);
       
@@ -52,13 +52,13 @@ export function usePedidosHybrid() {
     }
   };
 
-  // ✅ BUSCAR PRODUCTOS HÍBRIDO
+  // ✅ BUSCAR PRODUCTOS HÍBRIDO (Usa el nuevo sistema de catálogo completo)
   const buscarProductos = async (query) => {
     if (!query || query.trim().length < 2) {
       return [];
     }
 
-    // Modo PWA: Offline first
+    // Modo PWA: Offline first con catálogo completo
     if (appMode === 'pwa') {
       const resultadosOffline = offlineManager.buscarProductosOffline(query);
       
@@ -92,7 +92,7 @@ export function usePedidosHybrid() {
     }
   };
 
-  // ✅ REGISTRAR PEDIDO HÍBRIDO CON TIMEOUT
+  // ✅ REGISTRAR PEDIDO HÍBRIDO CON TIMEOUT MEJORADO DE 8-10 SEGUNDOS
   const registrarPedido = async (datosFormulario) => {
     const { cliente, productos, observaciones, empleado } = datosFormulario;
 
@@ -162,9 +162,9 @@ export function usePedidosHybrid() {
         }
       }
 
-      // ✅ MODO PWA: Intentar online con timeout, fallback offline
+      // ✅ MODO PWA: Intentar online con timeout de 8-10 segundos, fallback offline
       if (appMode === 'pwa') {
-        console.log('📱 PWA: Intentando registrar pedido online con timeout...');
+        console.log('📱 PWA: Intentando registrar pedido online con timeout de 8 segundos...');
         
         if (!navigator.onLine) {
           console.log('📱 PWA: Sin conexión, guardando offline directamente');
@@ -172,9 +172,9 @@ export function usePedidosHybrid() {
         }
 
         try {
-          // Timeout de 10 segundos como solicitaste
+          // ✅ TIMEOUT DE 8 SEGUNDOS COMO SOLICITASTE
           const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Timeout de 10 segundos')), 10000)
+            setTimeout(() => reject(new Error('Timeout de 8 segundos')), 8000)
           );
 
           const registroPromise = axiosAuth.post('/pedidos/registrar-pedido', pedidoData);
@@ -218,14 +218,19 @@ export function usePedidosHybrid() {
     }
   };
 
-  // ✅ FUNCIÓN HELPER PARA GUARDAR OFFLINE
+  // ✅ FUNCIÓN HELPER PARA GUARDAR OFFLINE (Mejorada)
   const guardarPedidoOffline = async (pedidoData) => {
     try {
       const tempId = await offlineManager.savePedidoPendiente(pedidoData);
       
       if (tempId) {
+        // ✅ ACTUALIZAR STOCK LOCAL INMEDIATAMENTE
+        for (const producto of pedidoData.productos) {
+          await offlineManager.updateLocalStock(producto.id, producto.cantidad);
+        }
+        
         toast.success('📱 Pedido guardado offline');
-        console.log(`📱 Pedido guardado offline con ID: ${tempId}`);
+        console.log(`📱 Pedido guardado offline con ID: ${tempId}, stock actualizado localmente`);
         return { 
           success: true, 
           offline: true, 
@@ -352,7 +357,7 @@ export function usePedidosHybrid() {
     pedidos,
     appMode,
     
-    // ✅ FUNCIONES DE BÚSQUEDA HÍBRIDAS (CORREGIDAS)
+    // ✅ FUNCIONES DE BÚSQUEDA HÍBRIDAS (MEJORADAS)
     buscarClientes,
     buscarProductos,
     
