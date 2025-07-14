@@ -57,9 +57,11 @@ export function useOfflineCatalog() {
 
   // ✅ NUEVA FUNCIÓN: DESCARGAR CATÁLOGO COMPLETO
   const downloadFullCatalog = async () => {
+  try {
+    console.log('📦 Descargando catálogo completo...');
+    
+    // ✅ OPCIÓN 1: Usar endpoint dedicado si existe
     try {
-      console.log('📦 Descargando catálogo completo...');
-      
       const response = await axiosAuth.get('/pedidos/catalogo-completo');
       
       if (response.data.success) {
@@ -83,14 +85,46 @@ export function useOfflineCatalog() {
           data: { clientes: clientes.length, productos: productos.length },
           metadata
         };
-      } else {
-        throw new Error(response.data.message || 'Error desconocido');
       }
-      
     } catch (error) {
-      console.error('❌ Error descargando catálogo completo:', error);
-      throw error;
+      console.log('⚠️ Endpoint dedicado no disponible, usando método alternativo...');
     }
+    
+    // ✅ OPCIÓN 2: Usar endpoints existentes con query vacía para obtener TODO
+    const [clientesResponse, productosResponse] = await Promise.all([
+      axiosAuth.get('/pedidos/filtrar-cliente?q='), // Query vacía = todos
+      axiosAuth.get('/pedidos/filtrar-producto?q=') // Query vacía = todos
+    ]);
+
+    const clientesData = clientesResponse.data?.data || [];
+    const productosData = productosResponse.data?.data || [];
+
+    // Guardar datos offline
+    await offlineManager.saveClientes(clientesData);
+    await offlineManager.saveProductos(productosData);
+    offlineManager.setLastSync('catalogo');
+    
+    // Generar versión simple basada en cantidad de datos
+    const simpleVersion = `${clientesData.length}_${productosData.length}_${Date.now()}`;
+    offlineManager.setCatalogVersion(simpleVersion);
+
+    console.log(`✅ Catálogo completo descargado (método alternativo): ${clientesData.length} clientes, ${productosData.length} productos`);
+    
+    setNeedsUpdate(false);
+    setLastUpdate(Date.now());
+    setCatalogVersion(simpleVersion);
+    loadStats();
+    
+    return {
+      success: true,
+      data: { clientes: clientesData.length, productos: productosData.length },
+      metadata: { version: simpleVersion }
+    };
+    
+  } catch (error) {
+    console.error('❌ Error descargando catálogo completo:', error);
+    throw error;
+  }
   };
 
   // ✅ VERIFICAR SI HAY NUEVA VERSIÓN SIN DESCARGAR TODO
