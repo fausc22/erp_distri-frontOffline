@@ -1,6 +1,6 @@
 {
-  "name": "VERTIMAR ERP",
-  "short_name": "VERTIMAR",
+  "name": "VERTIMAR ERP - OFFLINE",
+  "short_name": "VERTIMAR - OFFLINE",
   "description": "Sistema ERP de VERTIMAR",
   "start_url": "/inicio",
   "display": "standalone",
