@@ -5,53 +5,36 @@ const withPWA = require('next-pwa')({
   disable: false,
   buildExcludes: [/middleware-manifest\.json$/],
   
-  // ✅ PRE-CACHE DE PÁGINAS CRÍTICAS
+  // ✅ CACHE SOLO LA PÁGINA OFFLINE (esencial)
   additionalManifestEntries: [
-    { url: '/inicio', revision: null },
-    { url: '/ventas/RegistrarPedido', revision: null },
-    { url: '/login', revision: null },
+    { url: '/offline', revision: null },
   ],
   
+  // ✅ ESTRATEGIA DE CACHE MÍNIMA - next-pwa maneja el resto automáticamente
   runtimeCaching: [
     {
-      // Páginas específicas offline
-      urlPattern: /^https?:\/\/[^\/]+\/(inicio|ventas\/RegistrarPedido|login)(\?.*)?$/,
-      handler: 'StaleWhileRevalidate',
-      options: {
-        cacheName: 'offline-pages',
-        expiration: {
-          maxEntries: 10,
-          maxAgeSeconds: 60 * 60 * 24 * 30, // 30 días
-        },
-      },
-    },
-    {
-      // Assets estáticos
-      urlPattern: /\/_next\/static\/.*/,
+      // Solo asegurar que /offline esté siempre disponible
+      urlPattern: /^https?:\/\/[^\/]+\/offline(\?.*)?$/,
       handler: 'CacheFirst',
       options: {
-        cacheName: 'static-assets',
+        cacheName: 'offline-page',
         expiration: {
-          maxEntries: 100,
-          maxAgeSeconds: 60 * 60 * 24 * 30,
+          maxEntries: 1,
+          maxAgeSeconds: 60 * 60 * 24 * 365, // 1 año
         },
       },
     },
-    {
-      // Chunks de JavaScript
-      urlPattern: /\/_next\/.*\.js$/,
-      handler: 'CacheFirst',
-      options: {
-        cacheName: 'js-chunks',
-        expiration: {
-          maxEntries: 50,
-          maxAgeSeconds: 60 * 60 * 24 * 30,
-        },
-      },
-    },
+    // next-pwa maneja automáticamente:
+    // - /_next/static/* (assets estáticos)
+    // - Páginas principales
+    // - JavaScript chunks
+    // - CSS files
   ],
 });
 
 module.exports = withPWA({
   reactStrictMode: true,
+  
+  // ✅ NO NECESITAMOS redirects ni rewrites especiales
+  // El ConnectionManager maneja las redirecciones en JavaScript
 });

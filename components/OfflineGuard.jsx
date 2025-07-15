@@ -1,4 +1,4 @@
-// components/OfflineGuard.jsx - Protección de rutas y control de navegación offline
+// components/OfflineGuard.jsx - Simplificado para redirección directa a /offline
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useConnection } from '../utils/ConnectionManager';
@@ -6,28 +6,12 @@ import { getAppMode } from '../utils/offlineManager';
 
 export default function OfflineGuard({ children }) {
   const router = useRouter();
-  const { isOnline, eventType, eventData } = useConnection();
+  const { isOnline, eventType } = useConnection();
   const [isRedirecting, setIsRedirecting] = useState(false);
   
   const isPWA = getAppMode() === 'pwa';
 
-  // ✅ RUTAS PERMITIDAS EN MODO OFFLINE
-  const allowedOfflineRoutes = [
-    '/inicio',
-    '/ventas/RegistrarPedido',
-    '/login'
-  ];
-
-  // ✅ VERIFICAR SI LA RUTA ACTUAL ESTÁ PERMITIDA OFFLINE
-  const isRouteAllowedOffline = (path) => {
-    return allowedOfflineRoutes.some(route => {
-      if (route === path) return true;
-      if (route === '/inicio' && path.startsWith('/inicio')) return true;
-      return false;
-    });
-  };
-
-  // ✅ MANEJO DE EVENTOS DE CONECTIVIDAD
+  // ✅ MANEJO DE EVENTOS DE CONECTIVIDAD SIMPLIFICADO
   useEffect(() => {
     if (!isPWA || !eventType || isRedirecting) return;
 
@@ -35,133 +19,64 @@ export default function OfflineGuard({ children }) {
 
     switch (eventType) {
       case 'connection_lost_redirect':
-        handleOfflineRedirect(currentPath);
+        // Solo redirigir si NO está en /offline
+        if (currentPath !== '/offline') {
+          handleOfflineRedirect();
+        }
         break;
         
-      case 'connection_restored_redirect':
-        handleOnlineRedirect(currentPath);
+      case 'connection_restored_normal':
+        // Notificación normal de reconexión (no hacer nada especial)
+        console.log('🌐 Conexión restaurada en página online');
         break;
         
-      case 'connection_lost_working':
-      case 'connection_restored_working':
-        // No redirigir, solo notificar cambio de UI
-        console.log(`🔄 UI change event: ${eventType}`);
+      case 'connection_restored_show_button':
+        // Evento manejado por la página /offline
+        console.log('🔄 Evento para mostrar botón de reconexión');
         break;
         
       default:
         break;
     }
-  }, [eventType, eventData, router.pathname, isPWA, isRedirecting]);
+  }, [eventType, router.pathname, isPWA, isRedirecting]);
 
-  // ✅ REDIRECCIÓN A MODO OFFLINE CON NAVEGACIÓN ROBUSTA
-  const handleOfflineRedirect = async (currentPath) => {
+  // ✅ REDIRECCIÓN SIMPLIFICADA A /offline
+  const handleOfflineRedirect = () => {
     if (isRedirecting) return;
     
-    console.log(`📴 Manejando redirección offline desde ${currentPath}`);
+    console.log('📴 Redirigiendo a página offline dedicada');
     setIsRedirecting(true);
 
-    try {
-      // Si ya está en una ruta permitida offline, no redirigir
-      if (isRouteAllowedOffline(currentPath)) {
-        console.log(`✅ Ruta ${currentPath} permitida offline, no redirigir`);
-        setIsRedirecting(false);
-        return;
-      }
-
-      // ✅ NAVEGACIÓN ROBUSTA PARA SAFARI
-      console.log('🏠 Redirigiendo a inicio offline...');
-      window.location.href = '/inicio?mode=offline';
-      
-    } catch (error) {
-      console.error('❌ Error en redirección offline:', error);
-      // ✅ FALLBACK ADICIONAL
-      try {
-        window.location.replace('/inicio?mode=offline');
-      } catch (fallbackError) {
-        console.error('❌ Fallback también falló:', fallbackError);
-      }
-    } finally {
-      setTimeout(() => setIsRedirecting(false), 2000);
-    }
+    // ✅ REDIRECCIÓN INMEDIATA Y ROBUSTA
+    setTimeout(() => {
+      window.location.href = '/offline';
+    }, 500);
   };
 
-  // ✅ REDIRECCIÓN A MODO ONLINE CON NAVEGACIÓN ROBUSTA  
-  const handleOnlineRedirect = async (currentPath) => {
-    if (isRedirecting) return;
-    
-    console.log(`🌐 Manejando redirección online desde ${currentPath}`);
-    setIsRedirecting(true);
-
-    try {
-      // Si está en login, no redirigir
-      if (currentPath === '/login') {
-        setIsRedirecting(false);
-        return;
-      }
-
-      // ✅ NAVEGACIÓN ROBUSTA PARA SAFARI
-      console.log('🔄 Recargando página para modo online...');
-      window.location.href = '/inicio';
-      
-    } catch (error) {
-      console.error('❌ Error en redirección online:', error);
-      // ✅ FALLBACK ADICIONAL
-      try {
-        window.location.replace('/inicio');
-      } catch (fallbackError) {
-        console.error('❌ Fallback también falló:', fallbackError);
-      }
-    } finally {
-      setTimeout(() => setIsRedirecting(false), 2000);
-    }
-  };
-
-  // ✅ VERIFICACIÓN INICIAL DE RUTA AL MONTAR
+  // ✅ VERIFICACIÓN INICIAL SIMPLIFICADA
   useEffect(() => {
     if (!isPWA) return;
 
     const currentPath = router.pathname;
     
-    // Si estamos offline y en una ruta no permitida, redirigir
-    if (!isOnline && !isRouteAllowedOffline(currentPath) && !isRedirecting) {
-      console.log(`🚫 Ruta ${currentPath} no permitida offline`);
-      handleOfflineRedirect(currentPath);
+    // Si estamos offline, NO está en /offline ni en /login, redirigir
+    if (!isOnline && currentPath !== '/offline' && currentPath !== '/login' && !isRedirecting) {
+      console.log(`🚫 Offline detectado en ${currentPath}, redirigiendo a /offline`);
+      handleOfflineRedirect();
     }
-  }, [router.pathname, isOnline, isPWA]);
-
-  // ✅ INTERCEPTAR NAVEGACIÓN NO PERMITIDA
-  useEffect(() => {
-    if (!isPWA || isOnline) return;
-
-    const handleRouteChangeStart = (url) => {
-      // Si estamos offline y la nueva ruta no está permitida, cancelar
-      if (!isRouteAllowedOffline(url)) {
-        console.log(`🚫 Navegación a ${url} bloqueada en modo offline`);
-        
-        // Prevenir la navegación
-        router.events.emit('routeChangeError');
-        throw 'Navegación cancelada - Ruta no disponible offline';
-      }
-    };
-
-    router.events.on('routeChangeStart', handleRouteChangeStart);
-
-    return () => {
-      router.events.off('routeChangeStart', handleRouteChangeStart);
-    };
-  }, [isOnline, isPWA, router]);
+  }, [router.pathname, isOnline, isPWA, isRedirecting]);
 
   // ✅ MOSTRAR LOADING DURANTE REDIRECCIÓN
   if (isRedirecting) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+      <div className="min-h-screen bg-orange-100 flex items-center justify-center">
         <div className="text-center p-8">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <h2 className="text-xl font-semibold text-gray-800 mb-2">
-            {isOnline ? '🌐 Conectando...' : '📴 Modo Offline'}
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold text-orange-800 mb-2">
+            📴 Activando Modo Offline
           </h2>
-          <p className="text-gray-600">
-            {isOnline ? 'Cargando modo online...' : 'Cargando modo offline...'}
+          <p className="text-orange-600">
+            Cargando página offline dedicada...
           </p>
         </div>
       </div>
@@ -171,49 +86,22 @@ export default function OfflineGuard({ children }) {
   return children;
 }
 
-// ✅ COMPONENTE PARA BLOQUEAR NAVBAR EN MODO OFFLINE
-export function NavbarGuard({ children, isOfflineMode = false }) {
-  const { isOnline } = useConnection();
-  const isPWA = getAppMode() === 'pwa';
-  
-  // Si estamos en PWA offline, ocultar/bloquear navbar
-  if (isPWA && (!isOnline || isOfflineMode)) {
-    return null; // Ocultar navbar completamente
-  }
-  
+// ✅ COMPONENTE SIMPLIFICADO PARA NAVBAR (ya no necesita lógica compleja)
+export function NavbarGuard({ children }) {
+  // El navbar siempre se muestra, ya que /offline no usa layout
   return children;
 }
 
-// ✅ COMPONENTE PARA BLOQUEAR ENLACES EN MODO OFFLINE  
+// ✅ COMPONENTE SIMPLIFICADO PARA ENLACES
 export function LinkGuard({ href, children, className, ...props }) {
   const { isOnline } = useConnection();
   const isPWA = getAppMode() === 'pwa';
-  const router = useRouter();
   
-  const allowedOfflineRoutes = [
-    '/inicio',
-    '/ventas/RegistrarPedido',
-    '/login'
-  ];
-  
-  const isRouteAllowedOffline = (path) => {
-    return allowedOfflineRoutes.some(route => {
-      if (route === path) return true;
-      if (route === '/inicio' && path.startsWith('/inicio')) return true;
-      return false;
-    });
-  };
-
   const handleClick = (e) => {
-    // Si estamos offline en PWA y la ruta no está permitida
-    if (isPWA && !isOnline && !isRouteAllowedOffline(href)) {
+    // Si estamos offline en PWA, redirigir a /offline en lugar de bloquear
+    if (isPWA && !isOnline && href !== '/offline') {
       e.preventDefault();
-      
-      toast.error('📴 Esta función no está disponible offline', {
-        duration: 3000,
-        icon: '🚫'
-      });
-      
+      window.location.href = '/offline';
       return false;
     }
     
@@ -223,15 +111,10 @@ export function LinkGuard({ href, children, className, ...props }) {
     }
   };
 
-  // Estilo deshabilitado para enlaces offline
-  const disabledStyle = isPWA && !isOnline && !isRouteAllowedOffline(href) 
-    ? 'opacity-50 cursor-not-allowed pointer-events-none' 
-    : '';
-
   return (
     <a
       href={href}
-      className={`${className} ${disabledStyle}`}
+      className={className}
       onClick={handleClick}
       {...props}
     >
@@ -240,13 +123,9 @@ export function LinkGuard({ href, children, className, ...props }) {
   );
 }
 
-// ✅ HOC PARA PROTEGER PÁGINAS COMPLETAS
+// ✅ HOC SIMPLIFICADO PARA PROTEGER PÁGINAS
 export function withOfflineGuard(Component, options = {}) {
-  const {
-    allowOffline = false,
-    redirectTo = '/inicio?mode=offline',
-    requiredOnline = false
-  } = options;
+  const { allowOffline = false } = options;
 
   return function GuardedComponent(props) {
     const { isOnline } = useConnection();
@@ -260,14 +139,8 @@ export function withOfflineGuard(Component, options = {}) {
         return;
       }
 
-      // Verificar acceso según configuración
-      if (requiredOnline && !isOnline) {
-        router.push(redirectTo);
-        return;
-      }
-
       if (!allowOffline && !isOnline) {
-        router.push(redirectTo);
+        router.push('/offline');
         return;
       }
 
@@ -286,50 +159,5 @@ export function withOfflineGuard(Component, options = {}) {
     }
 
     return <Component {...props} />;
-  };
-}
-
-// ✅ HOOK PARA VERIFICAR PERMISOS DE NAVEGACIÓN
-export function useNavigationGuard() {
-  const { isOnline } = useConnection();
-  const router = useRouter();
-  const isPWA = getAppMode() === 'pwa';
-
-  const allowedOfflineRoutes = [
-    '/inicio',
-    '/ventas/RegistrarPedido', 
-    '/login'
-  ];
-
-  const canNavigateTo = (path) => {
-    if (!isPWA) return true;
-    if (isOnline) return true;
-    
-    return allowedOfflineRoutes.some(route => {
-      if (route === path) return true;
-      if (route === '/inicio' && path.startsWith('/inicio')) return true;
-      return false;
-    });
-  };
-
-  const navigateIfAllowed = async (path) => {
-    if (canNavigateTo(path)) {
-      await router.push(path);
-      return true;
-    } else {
-      toast.error('📴 Esta página no está disponible offline', {
-        duration: 3000,
-        icon: '🚫'
-      });
-      return false;
-    }
-  };
-
-  return {
-    canNavigateTo,
-    navigateIfAllowed,
-    isOnline,
-    isPWA,
-    allowedOfflineRoutes
   };
 }

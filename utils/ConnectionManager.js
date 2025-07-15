@@ -1,4 +1,4 @@
-// utils/ConnectionManager.js - Monitor Inteligente de Conectividad para PWA
+// utils/ConnectionManager.js - Monitor Simplificado para Redirección a Página Offline
 import { toast } from 'react-hot-toast';
 import { getAppMode } from './offlineManager';
 
@@ -8,7 +8,6 @@ class ConnectionManager {
     this.listeners = new Set();
     this.checkInterval = null;
     this.isTransitioning = false;
-    this.userWorkingState = null; // 'registering_order' | 'idle' | null
     this.reconnectionAttempts = 0;
     this.maxReconnectionAttempts = 3;
     
@@ -21,7 +20,7 @@ class ConnectionManager {
   }
 
   init() {
-    console.log('🔌 ConnectionManager iniciado para PWA');
+    console.log('🔌 ConnectionManager iniciado para redirección a página offline');
     
     // Listeners nativos del navegador
     window.addEventListener('online', this.handleOnline.bind(this));
@@ -135,7 +134,7 @@ class ConnectionManager {
     }
   }
 
-  // ✅ MANEJO DE PÉRDIDA DE CONEXIÓN
+  // ✅ MANEJO DE PÉRDIDA DE CONEXIÓN - SIMPLIFICADO
   handleConnectionLost() {
     if (this.isTransitioning) return;
     
@@ -143,44 +142,45 @@ class ConnectionManager {
     this.isTransitioning = true;
     
     const currentPath = window.location.pathname;
-    const isRegisteringOrder = currentPath === '/ventas/RegistrarPedido';
     
-    if (isRegisteringOrder && this.userWorkingState === 'registering_order') {
-      // Usuario está registrando pedido - NO interrumpir
-      console.log('📝 Usuario registrando pedido, no interrumpir');
-      
-      toast.error('📴 Sin conexión - Continúa en modo offline', {
-        duration: 3000,
-        icon: '📴'
-      });
-      
-      // Notificar a componentes que cambien UI pero no redirijan
-      this.notifyListeners('connection_lost_working', {
+    // ✅ SI YA ESTÁ EN LA PÁGINA OFFLINE, NO HACER NADA
+    if (currentPath === '/offline') {
+      console.log('📱 Ya está en página offline, no redirigir');
+      this.notifyListeners('connection_lost_already_offline', {
         isOnline: false,
-        maintainState: true,
         currentPath
       });
       
-    } else {
-      // Usuario en otra página - Redirigir a inicio offline
-      console.log('🏠 Redirigiendo a inicio offline');
-      
-      toast.error('📴 Sin conexión - Modo offline activado', {
-        duration: 2000
-      });
-      
-      this.notifyListeners('connection_lost_redirect', {
-        isOnline: false,
-        redirectTo: '/inicio?mode=offline'
-      });
+      setTimeout(() => {
+        this.isTransitioning = false;
+      }, 1000);
+      return;
     }
+    
+    // ✅ REDIRIGIR A PÁGINA OFFLINE SIEMPRE
+    console.log('🏠 Redirigiendo a página offline dedicada');
+    
+    toast.error('📴 Sin conexión - Modo offline activado', {
+      duration: 2000
+    });
+    
+    // Notificar antes de redirigir
+    this.notifyListeners('connection_lost_redirect', {
+      isOnline: false,
+      redirectTo: '/offline'
+    });
+    
+    // ✅ REDIRECCIÓN INMEDIATA Y ROBUSTA
+    setTimeout(() => {
+      window.location.href = '/offline';
+    }, 500);
     
     setTimeout(() => {
       this.isTransitioning = false;
     }, 2000);
   }
 
-  // ✅ MANEJO DE RESTAURACIÓN DE CONEXIÓN
+  // ✅ MANEJO DE RESTAURACIÓN DE CONEXIÓN - SIMPLIFICADO
   handleConnectionRestored() {
     if (this.isTransitioning) return;
     
@@ -188,37 +188,36 @@ class ConnectionManager {
     this.isTransitioning = true;
     
     const currentPath = window.location.pathname;
-    const isRegisteringOrder = currentPath === '/ventas/RegistrarPedido';
     
-    if (isRegisteringOrder && this.userWorkingState === 'registering_order') {
-      // Usuario está registrando pedido - NO interrumpir
-      console.log('📝 Usuario registrando pedido, no interrumpir reconexión');
+    // ✅ SI ESTÁ EN PÁGINA OFFLINE, SOLO NOTIFICAR (NO REDIRIGIR)
+    if (currentPath === '/offline') {
+      console.log('📱 En página offline, mostrando botón de reconexión');
       
-      toast.success('🌐 Conexión restaurada - Termina tu pedido para sincronizar', {
-        duration: 4000,
-        icon: '🌐'
-      });
+      // NO mostrar toast aquí - lo maneja la página offline
       
-      // Notificar cambio de UI pero no redirigir
-      this.notifyListeners('connection_restored_working', {
+      // Notificar a la página offline para mostrar botón
+      this.notifyListeners('connection_restored_show_button', {
         isOnline: true,
-        maintainState: true,
         currentPath
       });
       
-    } else {
-      // Usuario en otra página - Recargar y ir a inicio online
-      console.log('🏠 Recargando y enviando a inicio online');
-      
-      toast.success('🌐 Conexión restaurada', {
-        duration: 2000
-      });
-      
-      this.notifyListeners('connection_restored_redirect', {
-        isOnline: true,
-        redirectTo: '/inicio'
-      });
+      setTimeout(() => {
+        this.isTransitioning = false;
+      }, 1000);
+      return;
     }
+    
+    // ✅ SI ESTÁ EN CUALQUIER OTRA PÁGINA, NOTIFICAR NORMALMENTE
+    console.log('🌐 En página online, notificando restauración');
+    
+    toast.success('🌐 Conexión restaurada', {
+      duration: 2000
+    });
+    
+    this.notifyListeners('connection_restored_normal', {
+      isOnline: true,
+      currentPath
+    });
     
     setTimeout(() => {
       this.isTransitioning = false;
@@ -241,16 +240,6 @@ class ConnectionManager {
     console.log('⏰ Verificación periódica iniciada (cada 45s)');
   }
 
-  // ✅ GESTIÓN DE ESTADO DEL USUARIO
-  setUserWorkingState(state) {
-    console.log(`👤 Estado de trabajo del usuario: ${this.userWorkingState} → ${state}`);
-    this.userWorkingState = state;
-  }
-
-  getUserWorkingState() {
-    return this.userWorkingState;
-  }
-
   // ✅ SISTEMA DE LISTENERS
   addListener(callback) {
     this.listeners.add(callback);
@@ -265,7 +254,6 @@ class ConnectionManager {
       try {
         callback(eventType, {
           isOnline: this.isOnline,
-          userWorkingState: this.userWorkingState,
           ...data
         });
       } catch (error) {
@@ -278,7 +266,6 @@ class ConnectionManager {
   getConnectionState() {
     return {
       isOnline: this.isOnline,
-      userWorkingState: this.userWorkingState,
       isTransitioning: this.isTransitioning,
       isPWA: this.isPWA
     };
@@ -334,12 +321,12 @@ class ConnectionManager {
   getDebugInfo() {
     return {
       isOnline: this.isOnline,
-      userWorkingState: this.userWorkingState,
       isTransitioning: this.isTransitioning,
       isPWA: this.isPWA,
       reconnectionAttempts: this.reconnectionAttempts,
       listenersCount: this.listeners.size,
-      hasPeriodicCheck: !!this.checkInterval
+      hasPeriodicCheck: !!this.checkInterval,
+      currentPath: typeof window !== 'undefined' ? window.location.pathname : 'unknown'
     };
   }
 }
@@ -347,7 +334,7 @@ class ConnectionManager {
 // ✅ EXPORTAR INSTANCIA SINGLETON
 export const connectionManager = new ConnectionManager();
 
-// ✅ HOOK PARA USAR EN COMPONENTES
+// ✅ HOOK PARA USAR EN COMPONENTES - SIMPLIFICADO
 import { useState, useEffect } from 'react';
 
 export function useConnection() {
@@ -360,7 +347,6 @@ export function useConnection() {
     const unsubscribe = connectionManager.addListener((eventType, data) => {
       setConnectionState({
         isOnline: data.isOnline,
-        userWorkingState: data.userWorkingState,
         isTransitioning: data.isTransitioning || false,
         isPWA: data.isPWA || false,
         eventType,
@@ -376,7 +362,6 @@ export function useConnection() {
 
   return {
     ...connectionState,
-    setUserWorkingState: connectionManager.setUserWorkingState.bind(connectionManager),
     forceCheck: connectionManager.forceConnectionCheck.bind(connectionManager),
     waitForConnection: connectionManager.waitForConnection.bind(connectionManager)
   };

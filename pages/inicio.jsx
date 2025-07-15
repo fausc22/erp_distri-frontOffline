@@ -1,4 +1,4 @@
-// pages/inicio.jsx - Modificado para manejar modo offline
+// pages/inicio.jsx - Modificado para funcionar solo online
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
@@ -18,9 +18,6 @@ export default function Inicio() {
   // ✅ CONNECTION MANAGER
   const { isOnline, eventType } = useConnection();
   const isPWA = getAppMode() === 'pwa';
-  
-  // ✅ DETERMINAR SI ESTAMOS EN MODO OFFLINE
-  const isOfflineMode = router.query.mode === 'offline' || (!isOnline && isPWA);
 
   useEffect(() => {
     const checkAuth = () => {
@@ -68,25 +65,25 @@ export default function Inicio() {
     }
   }, [isPWA]);
 
-  // ✅ MANEJO DE EVENTOS DE CONECTIVIDAD
+  // ✅ MANEJO DE EVENTOS DE CONECTIVIDAD SIMPLIFICADO
   useEffect(() => {
     if (!eventType) return;
 
     switch (eventType) {
-      case 'connection_restored_redirect':
-        // Recarga para ir al modo online
-        console.log('🔄 Recargando para modo online...');
-        window.location.href = '/inicio';
+      case 'connection_lost_redirect':
+        // OfflineGuard se encarga de la redirección a /offline
+        console.log('📴 Redirección a /offline manejada por OfflineGuard');
         break;
         
-      case 'connection_lost_redirect':
-        // Ya estamos en inicio, solo cambiar la URL
-        if (!router.query.mode) {
-          router.replace('/inicio?mode=offline', undefined, { shallow: true });
-        }
+      case 'connection_restored_normal':
+        // Notificación normal - no hacer nada especial
+        console.log('🌐 Conexión restaurada en inicio');
+        break;
+        
+      default:
         break;
     }
-  }, [eventType, router]);
+  }, [eventType]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -118,38 +115,24 @@ export default function Inicio() {
   return (
     <div className="p-6">
       <Head>
-        <title>VERTIMAR | {isOfflineMode ? 'INICIO OFFLINE' : 'INICIO'}</title>
+        <title>VERTIMAR | INICIO</title>
       </Head>
       
-      {/* ✅ HEADER ADAPTATIVO SEGÚN MODO */}
-      <div className={`text-white rounded-lg p-6 mb-8 transition-all duration-300 ${
-        isOfflineMode 
-          ? 'bg-gradient-to-r from-orange-500 to-orange-600 border-l-4 border-orange-400' 
-          : 'bg-gradient-to-r from-blue-500 to-blue-600'
-      }`}>
+      {/* ✅ HEADER NORMAL (ya no hay modo offline aquí) */}
+      <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg p-6 mb-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold mb-2">
               {getGreeting()}, {empleado?.nombre} {empleado?.apellido}
             </h1>
-            <p className={isOfflineMode ? 'text-orange-100' : 'text-blue-100'}>
+            <p className="text-blue-100">
               {getRoleDescription(empleado?.rol)}
             </p>
-            
-            {/* ✅ INDICADOR DE MODO */}
-            {isOfflineMode && (
-              <div className="mt-2 flex items-center gap-2">
-                <div className="w-3 h-3 bg-orange-300 rounded-full animate-pulse"></div>
-                <span className="text-orange-100 text-sm font-medium">
-                  📱 MODO OFFLINE - Solo registro de pedidos disponible
-                </span>
-              </div>
-            )}
           </div>
           
           <div className="mt-4 md:mt-0 text-right">
-            {!isOfflineMode && <InstallButton />}
-            <p className={`text-sm ${isOfflineMode ? 'text-orange-100' : 'text-blue-100'}`}>
+            <InstallButton />
+            <p className="text-blue-100 text-sm">
               {new Date().toLocaleDateString('es-AR', {
                 weekday: 'long',
                 year: 'numeric',
@@ -159,113 +142,34 @@ export default function Inicio() {
             </p>
           </div>
         </div>
-        
-        {/* ✅ BOTÓN "IR A ONLINE" ARRIBA DEL TODO */}
-        {isOfflineMode && isOnline && (
-          <div className="mt-4 pt-4 border-t border-orange-400">
-            <div className="flex items-center justify-center">
-              <button
-                onClick={() => window.location.href = '/inicio'}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg text-lg font-bold transition-colors shadow-lg"
-              >
-                🌐 IR A MODO ONLINE
-              </button>
-            </div>
-            <div className="text-center mt-2">
-              <span className="text-orange-100 text-sm">
-                💡 Conexión detectada - Puedes volver al modo completo
-              </span>
-            </div>
-          </div>
-        )}
       </div>
 
-      {/* ✅ INFORMACIÓN OFFLINE */}
-      {isOfflineMode && catalogStats && (
-        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
-          <h3 className="font-semibold text-orange-800 mb-2 flex items-center gap-2">
-            📦 Catálogo Offline Disponible
-          </h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div>
-              <span className="text-orange-600 font-medium">Clientes:</span>
-              <div className="text-orange-800 font-bold">{catalogStats.clientes}</div>
-            </div>
-            <div>
-              <span className="text-orange-600 font-medium">Productos:</span>
-              <div className="text-orange-800 font-bold">{catalogStats.productos}</div>
-            </div>
-            <div>
-              <span className="text-orange-600 font-medium">Pendientes:</span>
-              <div className="text-orange-800 font-bold">{catalogStats.pedidosPendientes}</div>
-            </div>
-            <div>
-              <span className="text-orange-600 font-medium">Storage:</span>
-              <div className="text-orange-800 font-bold">{catalogStats.storageUsed?.mb}MB</div>
-            </div>
-          </div>
-          
-          {catalogStats.pedidosPendientes > 0 && (
-            <div className="mt-2 text-sm text-orange-700">
-              💡 Los pedidos pendientes se sincronizarán automáticamente cuando se recupere la conexión
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ✅ PANEL DE ACCESOS ADAPTATIVOS */}
+      {/* ✅ PANEL DE ACCESOS ONLINE */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         
-        {/* ✅ VENTAS - ADAPTADO PARA MODO OFFLINE */}
+        {/* ✅ VENTAS - SOLO ONLINE AHORA */}
         {(empleado?.rol === 'GERENTE' || empleado?.rol === 'VENDEDOR') && (
           <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
             <div className="flex items-center mb-4">
-              <div className={`p-3 rounded-full ${
-                isOfflineMode ? 'bg-orange-100' : 'bg-green-100'
-              }`}>
-                <svg className={`w-6 h-6 ${
-                  isOfflineMode ? 'text-orange-600' : 'text-green-600'
-                }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="bg-green-100 p-3 rounded-full">
+                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
                 </svg>
               </div>
-              <h3 className="text-xl font-semibold text-gray-800 ml-3">
-                {isOfflineMode ? 'Pedidos Offline' : 'Ventas'}
-              </h3>
+              <h3 className="text-xl font-semibold text-gray-800 ml-3">Ventas</h3>
             </div>
             
             <p className="text-gray-600 mb-4">
-              {isOfflineMode 
-                ? 'Registro de pedidos sin conexión a internet' 
-                : 'Gestión de notas de pedido y facturación'
-              }
+              Gestión de notas de pedido y facturación
             </p>
             
             <div className="space-y-2">
-              {isOfflineMode ? (
-                // Solo registrar pedidos en modo offline
+              <LinkGuard href="/ventas/RegistrarPedido" className="block text-blue-600 hover:text-blue-800 text-sm">• Registrar Nota de Pedido</LinkGuard>
+              <LinkGuard href="/ventas/HistorialPedidos" className="block text-blue-600 hover:text-blue-800 text-sm">• Historial de Pedidos</LinkGuard>
+              {empleado?.rol === 'GERENTE' && (
                 <>
-                  <LinkGuard 
-                    href="/ventas/RegistrarPedido" 
-                    className="block text-orange-600 hover:text-orange-800 text-sm font-medium"
-                  >
-                    📱 • Registrar Pedido Offline
-                  </LinkGuard>
-                  <div className="text-xs text-gray-500 mt-2">
-                    Los pedidos se guardarán localmente y se sincronizarán al reconectarse
-                  </div>
-                </>
-              ) : (
-                // Menú completo en modo online
-                <>
-                  <LinkGuard href="/ventas/RegistrarPedido" className="block text-blue-600 hover:text-blue-800 text-sm">• Registrar Nota de Pedido</LinkGuard>
-                  <LinkGuard href="/ventas/HistorialPedidos" className="block text-blue-600 hover:text-blue-800 text-sm">• Historial de Pedidos</LinkGuard>
-                  {empleado?.rol === 'GERENTE' && (
-                    <>
-                      <LinkGuard href="/ventas/ListaPrecios" className="block text-blue-600 hover:text-blue-800 text-sm">• Lista de Precios</LinkGuard>
-                      <LinkGuard href="/ventas/Facturacion" className="block text-blue-600 hover:text-blue-800 text-sm">• Facturación</LinkGuard>
-                    </>
-                  )}
+                  <LinkGuard href="/ventas/ListaPrecios" className="block text-blue-600 hover:text-blue-800 text-sm">• Lista de Precios</LinkGuard>
+                  <LinkGuard href="/ventas/Facturacion" className="block text-blue-600 hover:text-blue-800 text-sm">• Facturación</LinkGuard>
                 </>
               )}
             </div>
@@ -273,7 +177,7 @@ export default function Inicio() {
         )}
 
         {/* ✅ INVENTARIO - SOLO ONLINE */}
-        {!isOfflineMode && (empleado?.rol === 'GERENTE' || empleado?.rol === 'VENDEDOR') && (
+        {(empleado?.rol === 'GERENTE' || empleado?.rol === 'VENDEDOR') && (
           <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
             <div className="flex items-center mb-4">
               <div className="bg-blue-100 p-3 rounded-full">
@@ -297,8 +201,30 @@ export default function Inicio() {
           </div>
         )}
 
+        {/* ✅ COMPRAS - SOLO ONLINE */}
+        <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+          <div className="flex items-center mb-4">
+            <div className="bg-yellow-100 p-3 rounded-full">
+              <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+              </svg>
+            </div>
+            <h3 className="text-xl font-semibold text-gray-800 ml-3">Compras</h3>
+          </div>
+          <p className="text-gray-600 mb-4">Gestión de compras y gastos</p>
+          <div className="space-y-2">
+            {empleado?.rol === 'GERENTE' && (
+              <>
+                <LinkGuard href="/compras/RegistrarCompra" className="block text-blue-600 hover:text-blue-800 text-sm">• Registrar Compra</LinkGuard>
+                <LinkGuard href="/compras/HistorialCompras" className="block text-blue-600 hover:text-blue-800 text-sm">• Historial de Compras</LinkGuard>
+              </>
+            )}
+            <LinkGuard href="/compras/RegistrarGasto" className="block text-blue-600 hover:text-blue-800 text-sm">• Registrar Gasto</LinkGuard>
+          </div>
+        </div>
+
         {/* ✅ ADMINISTRACIÓN - SOLO ONLINE GERENTES */}
-        {!isOfflineMode && empleado?.rol === 'GERENTE' && (
+        {empleado?.rol === 'GERENTE' && (
           <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
             <div className="flex items-center mb-4">
               <div className="bg-purple-100 p-3 rounded-full">
@@ -321,7 +247,7 @@ export default function Inicio() {
         )}
 
         {/* ✅ VENDEDOR ADMINISTRACIÓN - SOLO ONLINE */}
-        {!isOfflineMode && empleado?.rol === 'VENDEDOR' && (
+        {empleado?.rol === 'VENDEDOR' && (
           <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
             <div className="flex items-center mb-4">
               <div className="bg-purple-100 p-3 rounded-full">
@@ -340,74 +266,66 @@ export default function Inicio() {
           </div>
         )}
 
-        {/* ✅ MENSAJE INFORMATIVO EN MODO OFFLINE */}
-        {isOfflineMode && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+        {/* ✅ FINANZAS - SOLO ONLINE Y GERENTES */}
+        {empleado?.rol === 'GERENTE' && (
+          <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
             <div className="flex items-center mb-4">
-              <div className="bg-yellow-100 p-3 rounded-full">
-                <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <div className="bg-green-100 p-3 rounded-full">
+                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
                 </svg>
               </div>
-              <h3 className="text-xl font-semibold text-yellow-800 ml-3">Modo Offline</h3>
+              <h3 className="text-xl font-semibold text-gray-800 ml-3">Finanzas</h3>
             </div>
-            <div className="text-yellow-700 space-y-2 text-sm">
-              <p>• 📱 Solo puedes registrar pedidos sin conexión</p>
-              <p>• 💾 Los pedidos se guardan localmente en tu dispositivo</p>
-              <p>• 🔄 Se sincronizarán automáticamente al recuperar conexión</p>
-              <p>• 📊 Tienes acceso al catálogo completo offline</p>
-              <p>• 🌐 Las demás funciones requieren conexión a internet</p>
+            <p className="text-gray-600 mb-4">Control financiero y reportes</p>
+            <div className="space-y-2">
+              <LinkGuard href="/finanzas/fondos" className="block text-blue-600 hover:text-blue-800 text-sm">• Fondos</LinkGuard>
+              <LinkGuard href="/finanzas/ingresos" className="block text-blue-600 hover:text-blue-800 text-sm">• Historial de Ingresos</LinkGuard>
+              <LinkGuard href="/finanzas/egresos" className="block text-blue-600 hover:text-blue-800 text-sm">• Historial de Egresos</LinkGuard>
+              <LinkGuard href="/finanzas/reportes" className="block text-blue-600 hover:text-blue-800 text-sm">• Reportes Financieros</LinkGuard>
             </div>
           </div>
         )}
       </div>
 
-      {/* ✅ INFORMACIÓN DEL SISTEMA ADAPTATIVA */}
-      <div className={`mt-8 rounded-lg p-6 ${
-        isOfflineMode ? 'bg-orange-50' : 'bg-gray-50'
-      }`}>
-        <h3 className={`text-lg font-semibold mb-3 ${
-          isOfflineMode ? 'text-orange-800' : 'text-gray-800'
-        }`}>
+      {/* ✅ INFORMACIÓN DEL SISTEMA NORMAL */}
+      <div className="mt-8 bg-gray-50 rounded-lg p-6">
+        <h3 className="text-lg font-semibold mb-3 text-gray-800">
           Información del Sistema
         </h3>
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-          <div className={isOfflineMode ? 'text-orange-700' : 'text-gray-600'}>
+          <div className="text-gray-600">
             <strong>Usuario:</strong> {empleado?.usuario || 'N/A'}
           </div>
-          <div className={isOfflineMode ? 'text-orange-700' : 'text-gray-600'}>
+          <div className="text-gray-600">
             <strong>Rol:</strong> {empleado?.rol || 'N/A'}
           </div>
-          <div className={isOfflineMode ? 'text-orange-700' : 'text-gray-600'}>
+          <div className="text-gray-600">
             <strong>Email:</strong> {empleado?.email || 'No configurado'}
           </div>
         </div>
         
-        {/* ✅ INFORMACIÓN ESPECÍFICA DEL MODO */}
         <div className="mt-4 pt-4 border-t border-gray-200">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div className={isOfflineMode ? 'text-orange-700' : 'text-gray-600'}>
-              <strong>Modo:</strong> {isOfflineMode ? '📱 PWA Offline' : '🌐 Web Online'}
+            <div className="text-gray-600">
+              <strong>Modo:</strong> 🌐 Web Online
             </div>
-            <div className={isOfflineMode ? 'text-orange-700' : 'text-gray-600'}>
+            <div className="text-gray-600">
               <strong>Estado:</strong> {isOnline ? '✅ Conectado' : '📴 Sin conexión'}
             </div>
             {isPWA && catalogStats && (
               <>
-                <div className={isOfflineMode ? 'text-orange-700' : 'text-gray-600'}>
+                <div className="text-gray-600">
                   <strong>Catálogo:</strong> {catalogStats.clientes} clientes, {catalogStats.productos} productos
                 </div>
-                <div className={isOfflineMode ? 'text-orange-700' : 'text-gray-600'}>
+                <div className="text-gray-600">
                   <strong>Storage:</strong> {catalogStats.storageUsed?.mb}MB utilizados
                 </div>
               </>
             )}
           </div>
         </div>
-
-        {/* ✅ ACCIONES ESPECÍFICAS DEL MODO */}
-        {/* BOTÓN MOVIDO ARRIBA - Ya no se muestra aquí */}
       </div>
     </div>
   );
