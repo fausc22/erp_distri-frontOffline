@@ -11,7 +11,7 @@ export function useFormPersistence(formKey, formData, options = {}) {
     autoSaveInterval = AUTO_SAVE_INTERVAL,
     onRestore = null,
     onSave = null,
-    showToasts = true
+    showToasts = false // ✅ TOASTS DESHABILITADOS POR DEFECTO
   } = options;
 
   const autoSaveRef = useRef(null);
@@ -36,13 +36,7 @@ export function useFormPersistence(formKey, formData, options = {}) {
       localStorage.setItem(storageKey, JSON.stringify(formBackup));
       lastSaveRef.current = Date.now();
 
-      if (showToast && showToasts) {
-        toast.success('📄 Formulario guardado automáticamente', {
-          duration: 2000,
-          icon: '💾'
-        });
-      }
-
+      // ✅ TOASTS ELIMINADOS - Auto-save silencioso
       console.log(`💾 Formulario ${formKey} guardado automáticamente`);
       
       // Callback personalizado
@@ -52,10 +46,7 @@ export function useFormPersistence(formKey, formData, options = {}) {
 
     } catch (error) {
       console.error('❌ Error guardando formulario:', error);
-      
-      if (showToasts) {
-        toast.error('Error guardando formulario automáticamente');
-      }
+      // ✅ TOASTS ELIMINADOS - Errores silenciosos
     }
   }, [formData, enabled, formKey, storageKey, onSave, showToasts]);
 
@@ -85,13 +76,8 @@ export function useFormPersistence(formKey, formData, options = {}) {
 
       console.log(`🔄 Restaurando formulario ${formKey} desde backup`);
       
-      if (showToasts) {
-        toast.success('🔄 Formulario restaurado automáticamente', {
-          duration: 3000,
-          icon: '📄'
-        });
-      }
-
+      // ✅ TOASTS ELIMINADOS - Restauración silenciosa
+      
       // Callback personalizado
       if (onRestore) {
         onRestore(formBackup.data, formBackup);
@@ -250,7 +236,7 @@ function formatAge(ms) {
   }
 }
 
-// ✅ HOOK SIMPLIFICADO PARA PEDIDOS
+// ✅ HOOK SIMPLIFICADO PARA PEDIDOS (SIN TOASTS)
 export function usePedidosFormPersistence(pedidosContextData) {
   const formData = {
     cliente: pedidosContextData.cliente,
@@ -265,12 +251,12 @@ export function usePedidosFormPersistence(pedidosContextData) {
   return useFormPersistence('registrar_pedido', formData, {
     enabled: true,
     autoSaveInterval: 60000, // 1 minuto
-    showToasts: true,
+    showToasts: false, // ✅ TOASTS COMPLETAMENTE DESHABILITADOS
     onRestore: (data) => {
-      console.log('🔄 Datos de pedido restaurados:', data);
+      console.log('🔄 Datos de pedido restaurados silenciosamente:', data);
     },
     onSave: (data) => {
-      console.log('💾 Datos de pedido guardados:', {
+      console.log('💾 Datos de pedido guardados silenciosamente:', {
         cliente: data.cliente?.nombre,
         productos: data.productos?.length,
         total: data.total

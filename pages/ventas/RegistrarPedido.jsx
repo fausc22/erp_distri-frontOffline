@@ -62,6 +62,7 @@ function RegistrarPedidoContent() {
   // ✅ ESTADO DE UI ADAPTATIVA
   const [uiTheme, setUiTheme] = useState('online');
   const [showConnectionChange, setShowConnectionChange] = useState(false);
+  const [showBackupButton, setShowBackupButton] = useState(false); // ✅ CONTROL INTELIGENTE DEL BACKUP
 
   // ✅ NOTIFICAR AL CONNECTION MANAGER QUE ESTAMOS TRABAJANDO
   useEffect(() => {
@@ -95,6 +96,11 @@ function RegistrarPedidoContent() {
         setUiTheme('online');
         setShowConnectionChange(true);
         
+        // ✅ MOSTRAR BACKUP SOLO EN ESTA TRANSICIÓN ESPECÍFICA
+        if (hasSavedForm()) {
+          setShowBackupButton(true);
+        }
+        
         setTimeout(() => setShowConnectionChange(false), 3000);
         break;
         
@@ -103,7 +109,26 @@ function RegistrarPedidoContent() {
     }
   }, [eventType, saveOnConnectivityChange]);
 
-  // ✅ RESTAURAR FORMULARIO AL MONTAR (SI HAY BACKUP)
+  // ✅ RESTAURAR BACKUP Y LIMPIAR BOTÓN
+  const handleRestoreBackup = () => {
+    const savedData = restoreForm();
+    
+    if (savedData) {
+      // Restaurar datos al contexto silenciosamente
+      if (savedData.cliente) {
+        setCliente(savedData.cliente);
+      }
+      
+      if (savedData.observaciones) {
+        setObservaciones(savedData.observaciones);
+      }
+      
+      console.log('🔄 Backup restaurado silenciosamente');
+    }
+    
+    // Ocultar botón después de usar
+    setShowBackupButton(false);
+  };
   useEffect(() => {
     const checkAndRestoreForm = async () => {
       if (hasSavedForm()) {
@@ -179,8 +204,9 @@ function RegistrarPedidoContent() {
     const resultado = await registrarPedido(datosCompletos);
     
     if (resultado.success) {
-      // ✅ LIMPIAR BACKUP AL REGISTRAR EXITOSAMENTE
+      // ✅ LIMPIAR BACKUP Y BOTÓN AL REGISTRAR EXITOSAMENTE
       clearSavedForm();
+      setShowBackupButton(false);
       
       clearPedido();
       setMostrarConfirmacion(false);
@@ -225,15 +251,14 @@ function RegistrarPedidoContent() {
   };
 
   const handleSalir = () => {
-    // ✅ GUARDAR ANTES DE SALIR (SI HAY DATOS)
+    // ✅ GUARDAR ANTES DE SALIR (SI HAY DATOS) - SILENCIOSO
     if (cliente || productos.length > 0 || observaciones.trim()) {
       saveForm();
-      toast.info('📄 Formulario guardado automáticamente', {
-        duration: 2000
-      });
+      console.log('📄 Formulario guardado antes de salir');
     }
     
     setUserWorkingState('idle');
+    // ✅ NAVEGACIÓN ROBUSTA PARA SAFARI
     window.location.href = '/';
   };
 
@@ -349,35 +374,15 @@ function RegistrarPedidoContent() {
           </div>
         )}
 
-        {/* ✅ INDICADOR DE BACKUP DISPONIBLE */}
-        {hasSavedForm() && (
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <div className="text-blue-600 mr-2">📄</div>
-                <div className="text-sm text-blue-800">
-                  <strong>Backup disponible:</strong> Hay un formulario guardado automáticamente
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    const savedData = restoreForm();
-                    if (savedData?.cliente) setCliente(savedData.cliente);
-                    if (savedData?.observaciones) setObservaciones(savedData.observaciones);
-                  }}
-                  className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700"
-                >
-                  Restaurar
-                </button>
-                <button
-                  onClick={clearSavedForm}
-                  className="text-xs bg-gray-600 text-white px-2 py-1 rounded hover:bg-gray-700"
-                >
-                  Descartar
-                </button>
-              </div>
-            </div>
+        {/* ✅ BOTÓN DE BACKUP INTELIGENTE (Solo en transición específica) */}
+        {showBackupButton && hasSavedForm() && (
+          <div className="mb-4 flex justify-center">
+            <button
+              onClick={handleRestoreBackup}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+            >
+              📄 RESTAURAR VENTA ANTERIOR PENDIENTE
+            </button>
           </div>
         )}
         

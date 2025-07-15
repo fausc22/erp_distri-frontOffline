@@ -53,7 +53,7 @@ export default function OfflineGuard({ children }) {
     }
   }, [eventType, eventData, router.pathname, isPWA, isRedirecting]);
 
-  // ✅ REDIRECCIÓN A MODO OFFLINE
+  // ✅ REDIRECCIÓN A MODO OFFLINE CON NAVEGACIÓN ROBUSTA
   const handleOfflineRedirect = async (currentPath) => {
     if (isRedirecting) return;
     
@@ -68,18 +68,24 @@ export default function OfflineGuard({ children }) {
         return;
       }
 
-      // Redirigir a inicio offline
+      // ✅ NAVEGACIÓN ROBUSTA PARA SAFARI
       console.log('🏠 Redirigiendo a inicio offline...');
-      await router.push('/inicio?mode=offline');
+      window.location.href = '/inicio?mode=offline';
       
     } catch (error) {
       console.error('❌ Error en redirección offline:', error);
+      // ✅ FALLBACK ADICIONAL
+      try {
+        window.location.replace('/inicio?mode=offline');
+      } catch (fallbackError) {
+        console.error('❌ Fallback también falló:', fallbackError);
+      }
     } finally {
       setTimeout(() => setIsRedirecting(false), 2000);
     }
   };
 
-  // ✅ REDIRECCIÓN A MODO ONLINE
+  // ✅ REDIRECCIÓN A MODO ONLINE CON NAVEGACIÓN ROBUSTA  
   const handleOnlineRedirect = async (currentPath) => {
     if (isRedirecting) return;
     
@@ -93,14 +99,18 @@ export default function OfflineGuard({ children }) {
         return;
       }
 
-      // Recargar página para asegurar estado fresco
+      // ✅ NAVEGACIÓN ROBUSTA PARA SAFARI
       console.log('🔄 Recargando página para modo online...');
       window.location.href = '/inicio';
       
     } catch (error) {
       console.error('❌ Error en redirección online:', error);
-      // Fallback
-      await router.push('/inicio');
+      // ✅ FALLBACK ADICIONAL
+      try {
+        window.location.replace('/inicio');
+      } catch (fallbackError) {
+        console.error('❌ Fallback también falló:', fallbackError);
+      }
     } finally {
       setTimeout(() => setIsRedirecting(false), 2000);
     }

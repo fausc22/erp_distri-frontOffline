@@ -80,39 +80,58 @@ class ConnectionManager {
     }
   }
 
-  // ✅ VERIFICACIÓN INTELIGENTE DE CONEXIÓN
+  // ✅ VERIFICACIÓN INTELIGENTE DE CONEXIÓN ROBUSTA
   async verifyConnection() {
-    try {
-      // Hacer una petición ligera al backend
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/health`, {
-        method: 'GET',
-        signal: controller.signal,
-        cache: 'no-cache'
-      });
-      
-      clearTimeout(timeoutId);
-      
-      const wasOnline = this.isOnline;
-      this.isOnline = response.ok;
-      
-      if (!wasOnline && this.isOnline) {
-        this.handleConnectionRestored();
-      } else if (wasOnline && !this.isOnline) {
-        this.handleConnectionLost();
+    const wasOnline = this.isOnline;
+    let connectionWorks = false;
+    
+    // ✅ MÚLTIPLES INTENTOS CON DIFERENTES ENDPOINTS
+    const endpoints = [
+      `${process.env.NEXT_PUBLIC_API_URL}/health`,
+      'https://8.8.8.8', // Google DNS como fallback
+    ];
+    
+    for (let attempt = 0; attempt < 2; attempt++) {
+      for (const endpoint of endpoints) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 segundos
+          
+          const response = await fetch(endpoint, {
+            method: 'GET',
+            signal: controller.signal,
+            cache: 'no-cache',
+            mode: endpoint.includes('8.8.8.8') ? 'no-cors' : 'cors'
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (response.ok || endpoint.includes('8.8.8.8')) {
+            connectionWorks = true;
+            break;
+          }
+          
+        } catch (error) {
+          console.log(`📡 Intento ${attempt + 1} falló para ${endpoint}:`, error.message);
+          continue;
+        }
       }
       
-    } catch (error) {
-      console.log('📡 Verificación de conexión falló:', error.message);
+      if (connectionWorks) break;
       
-      const wasOnline = this.isOnline;
-      this.isOnline = false;
-      
-      if (wasOnline) {
-        this.handleConnectionLost();
+      // Esperar 2 segundos antes del siguiente intento
+      if (attempt < 1) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
       }
+    }
+    
+    this.isOnline = connectionWorks;
+    
+    // Solo cambiar estado si realmente cambió
+    if (!wasOnline && this.isOnline) {
+      this.handleConnectionRestored();
+    } else if (wasOnline && !this.isOnline) {
+      this.handleConnectionLost();
     }
   }
 

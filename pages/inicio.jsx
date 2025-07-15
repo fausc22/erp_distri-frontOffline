@@ -159,6 +159,25 @@ export default function Inicio() {
             </p>
           </div>
         </div>
+        
+        {/* ✅ BOTÓN "IR A ONLINE" ARRIBA DEL TODO */}
+        {isOfflineMode && isOnline && (
+          <div className="mt-4 pt-4 border-t border-orange-400">
+            <div className="flex items-center justify-center">
+              <button
+                onClick={() => window.location.href = '/inicio'}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg text-lg font-bold transition-colors shadow-lg"
+              >
+                🌐 IR A MODO ONLINE
+              </button>
+            </div>
+            <div className="text-center mt-2">
+              <span className="text-orange-100 text-sm">
+                💡 Conexión detectada - Puedes volver al modo completo
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ✅ INFORMACIÓN OFFLINE */}
@@ -388,21 +407,7 @@ export default function Inicio() {
         </div>
 
         {/* ✅ ACCIONES ESPECÍFICAS DEL MODO */}
-        {isOfflineMode && isOnline && (
-          <div className="mt-4 pt-4 border-t border-orange-200">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-orange-700">
-                <strong>💡 Sugerencia:</strong> Conexión detectada - Puedes volver al modo completo
-              </div>
-              <button
-                onClick={() => window.location.href = '/inicio'}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors"
-              >
-                🌐 Ir a Modo Online
-              </button>
-            </div>
-          </div>
-        )}
+        {/* BOTÓN MOVIDO ARRIBA - Ya no se muestra aquí */}
       </div>
     </div>
   );
