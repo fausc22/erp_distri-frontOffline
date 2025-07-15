@@ -26,8 +26,14 @@ function MyApp({ Component, pageProps }) {
               {/* ✅ TOASTER MEJORADO PARA PWA */}
               <Toaster
                 position="top-right"
+                containerStyle={{
+                  top: 20,
+                  right: 20,
+                  zIndex: 9999,
+                }}
                 toastOptions={{
                   duration: 4000,
+                  className: 'pwa-toast',
                   style: {
                     background: '#363636',
                     color: '#fff',
@@ -65,21 +71,9 @@ function MyApp({ Component, pageProps }) {
                       color: 'white',
                     },
                   },
-                  // ✅ TOASTS ESPECÍFICOS PARA PWA
                   custom: {
                     duration: 4000,
                   },
-                }}
-                // ✅ CONFIGURACIÓN ESPECÍFICA PARA PWA
-                containerStyle={{
-                  top: 20,
-                  right: 20,
-                  zIndex: 9999,
-                }}
-                toastOptions={{
-                  // ✅ Configuración para diferentes tipos de PWA
-                  className: 'pwa-toast',
-                  // ✅ Soporte para modo offline
                   ariaProps: {
                     role: 'status',
                     'aria-live': 'polite',
