@@ -1,4 +1,4 @@
-// hooks/useOfflineCatalog.js - VERSIÓN COMPLETA CORREGIDA
+// hooks/useOfflineCatalog.js - VERSIÓN MEJORADA con auto-actualización post-pedidos
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-hot-toast';
 import { offlineManager, getAppMode } from '../utils/offlineManager';
@@ -22,24 +22,16 @@ export function useOfflineCatalog() {
     }
   }, [isPWA]);
 
-  // ✅ AUTO-ACTUALIZACIÓN AL ABRIR APP (SOLO PWA)
-  useEffect(() => {
-    if (isPWA && navigator.onLine) {
-      console.log('🔄 PWA detectada con internet, intentando auto-actualización...');
-      updateCatalogSilently();
-    }
-  }, [isPWA]);
-
   const checkIfNeedsUpdate = () => {
     const clientes = offlineManager.getClientes();
     const productos = offlineManager.getProductos();
     const lastSync = offlineManager.getLastSync();
     
-    // ✅ CRITERIOS MÁS ESTRICTOS PARA CATÁLOGO COMPLETO
+    // ✅ CRITERIOS PARA ACTUALIZACIÓN
     const needsUpdateFlag = clientes.length === 0 || 
                            productos.length === 0 || 
                            !lastSync.catalogo || 
-                           (Date.now() - lastSync.catalogo) > 12 * 60 * 60 * 1000; // 12 horas
+                           (Date.now() - lastSync.catalogo) > 8 * 60 * 60 * 1000; // 8 horas
     
     setNeedsUpdate(needsUpdateFlag);
     setLastUpdate(lastSync.catalogo);
@@ -55,21 +47,25 @@ export function useOfflineCatalog() {
     setCatalogVersion(version);
   };
 
-  // ✅ NUEVA FUNCIÓN: DESCARGAR CATÁLOGO COMPLETO
+  // ✅ NUEVA FUNCIÓN: DESCARGAR CATÁLOGO COMPLETO OPTIMIZADO
   const downloadFullCatalog = async () => {
-  try {
-    console.log('📦 Descargando catálogo completo...');
-    
-    // ✅ OPCIÓN 1: Usar endpoint dedicado si existe
     try {
+      console.log('📦 Descargando catálogo completo optimizado...');
+      
+      // ✅ USAR ENDPOINT DEDICADO DEL BACKEND
       const response = await axiosAuth.get('/pedidos/catalogo-completo');
       
       if (response.data.success) {
         const { clientes, productos, metadata } = response.data.data;
         
-        // Guardar datos offline
-        await offlineManager.saveClientes(clientes);
-        await offlineManager.saveProductos(productos);
+        console.log(`📥 Descargando: ${clientes.length} clientes, ${productos.length} productos`);
+        
+        // Guardar datos offline en paralelo
+        await Promise.all([
+          offlineManager.saveClientes(clientes),
+          offlineManager.saveProductos(productos)
+        ]);
+        
         offlineManager.setLastSync('catalogo');
         offlineManager.setCatalogVersion(metadata.version);
         
@@ -85,49 +81,17 @@ export function useOfflineCatalog() {
           data: { clientes: clientes.length, productos: productos.length },
           metadata
         };
+      } else {
+        throw new Error(response.data.message || 'Error del servidor');
       }
+      
     } catch (error) {
-      console.log('⚠️ Endpoint dedicado no disponible, usando método alternativo...');
+      console.error('❌ Error descargando catálogo completo:', error);
+      throw error;
     }
-    
-    // ✅ OPCIÓN 2: Usar endpoints existentes con query vacía para obtener TODO
-    const [clientesResponse, productosResponse] = await Promise.all([
-      axiosAuth.get('/pedidos/filtrar-cliente?q='), // Query vacía = todos
-      axiosAuth.get('/pedidos/filtrar-producto?q=') // Query vacía = todos
-    ]);
-
-    const clientesData = clientesResponse.data?.data || [];
-    const productosData = productosResponse.data?.data || [];
-
-    // Guardar datos offline
-    await offlineManager.saveClientes(clientesData);
-    await offlineManager.saveProductos(productosData);
-    offlineManager.setLastSync('catalogo');
-    
-    // Generar versión simple basada en cantidad de datos
-    const simpleVersion = `${clientesData.length}_${productosData.length}_${Date.now()}`;
-    offlineManager.setCatalogVersion(simpleVersion);
-
-    console.log(`✅ Catálogo completo descargado (método alternativo): ${clientesData.length} clientes, ${productosData.length} productos`);
-    
-    setNeedsUpdate(false);
-    setLastUpdate(Date.now());
-    setCatalogVersion(simpleVersion);
-    loadStats();
-    
-    return {
-      success: true,
-      data: { clientes: clientesData.length, productos: productosData.length },
-      metadata: { version: simpleVersion }
-    };
-    
-  } catch (error) {
-    console.error('❌ Error descargando catálogo completo:', error);
-    throw error;
-  }
   };
 
-  // ✅ VERIFICAR SI HAY NUEVA VERSIÓN SIN DESCARGAR TODO
+  // ✅ VERIFICAR SI HAY NUEVA VERSIÓN
   const checkForUpdates = async () => {
     try {
       const currentVersion = offlineManager.getCatalogVersion();
@@ -157,28 +121,88 @@ export function useOfflineCatalog() {
     }
   };
 
-  // ✅ ACTUALIZACIÓN SILENCIOSA MEJORADA
+  // ✅ ACTUALIZACIÓN SILENCIOSA INTELIGENTE
   const updateCatalogSilently = async () => {
     try {
-      console.log('🔄 Iniciando actualización silenciosa del catálogo completo...');
+      console.log('🔄 Iniciando actualización silenciosa inteligente...');
       
-      // Timeout de 10 segundos para no bloquear
+      // Timeout de 8 segundos para no bloquear
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout')), 10000)
+        setTimeout(() => reject(new Error('Timeout')), 8000)
       );
 
       const updatePromise = downloadFullCatalog();
 
       const result = await Promise.race([updatePromise, timeoutPromise]);
       
-      console.log(`✅ Catálogo completo actualizado silenciosamente: ${result.data.clientes} clientes, ${result.data.productos} productos`);
+      console.log(`✅ Catálogo actualizado silenciosamente: ${result.data.clientes} clientes, ${result.data.productos} productos`);
       
       return { success: true, silent: true, ...result };
       
     } catch (error) {
-      console.log('⚠️ Auto-actualización falló (normal):', error.message);
+      console.log('⚠️ Auto-actualización silenciosa falló (normal):', error.message);
       setNeedsUpdate(true);
       return { success: false, silent: true, error: error.message };
+    }
+  };
+
+  // ✅ NUEVA FUNCIÓN: AUTO-ACTUALIZACIÓN POST-PEDIDO
+  const updateCatalogAfterOrder = async () => {
+    if (!isPWA || !navigator.onLine) {
+      console.log('⚠️ No se puede actualizar catálogo: PWA offline');
+      return { success: false, reason: 'offline' };
+    }
+
+    try {
+      console.log('🔄 Actualizando catálogo después de registrar pedido...');
+      
+      // Timeout más corto para post-pedido (5 segundos)
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout post-pedido')), 5000)
+      );
+
+      const updatePromise = downloadFullCatalog();
+      const result = await Promise.race([updatePromise, timeoutPromise]);
+      
+      console.log(`✅ Catálogo post-pedido actualizado: ${result.data.clientes} clientes, ${result.data.productos} productos`);
+      
+      // Toast discreto
+      toast.success('📦 Catálogo actualizado', {
+        duration: 2000,
+        icon: '🔄'
+      });
+      
+      return { success: true, postOrder: true, ...result };
+      
+    } catch (error) {
+      console.log('⚠️ Actualización post-pedido falló (continuando):', error.message);
+      return { success: false, postOrder: true, error: error.message };
+    }
+  };
+
+  // ✅ NUEVA FUNCIÓN: AUTO-ACTUALIZACIÓN POST-SINCRONIZACIÓN
+  const updateCatalogAfterSync = async () => {
+    if (!isPWA || !navigator.onLine) {
+      return { success: false, reason: 'offline' };
+    }
+
+    try {
+      console.log('🔄 Actualizando catálogo después de sincronizar pedidos offline...');
+      
+      const result = await downloadFullCatalog();
+      
+      console.log(`✅ Catálogo post-sincronización actualizado: ${result.data.clientes} clientes, ${result.data.productos} productos`);
+      
+      toast.success('📦 Catálogo sincronizado', {
+        duration: 2000,
+        icon: '🔄'
+      });
+      
+      return { success: true, postSync: true, ...result };
+      
+    } catch (error) {
+      console.log('⚠️ Actualización post-sincronización falló:', error.message);
+      return { success: false, postSync: true, error: error.message };
     }
   };
 
@@ -213,11 +237,10 @@ export function useOfflineCatalog() {
     }
   };
 
-  // ✅ BÚSQUEDA HÍBRIDA MEJORADA (ONLINE/OFFLINE)
+  // ✅ BÚSQUEDA HÍBRIDA MEJORADA
   const buscarClientes = async (query) => {
     if (!query || query.trim().length < 2) return [];
 
-    // Si es PWA, usar offline first
     if (isPWA) {
       const resultadosOffline = offlineManager.buscarClientesOffline(query);
       
@@ -226,21 +249,19 @@ export function useOfflineCatalog() {
         return resultadosOffline;
       }
       
-      // Si no hay resultados offline, intentar online como fallback
       if (navigator.onLine) {
         try {
           const response = await axiosAuth.get(`/pedidos/filtrar-cliente?q=${encodeURIComponent(query)}`);
           return response.data?.data || [];
         } catch (error) {
           console.error('❌ Error en búsqueda online de clientes:', error);
-          return resultadosOffline; // Devolver offline aunque sea vacío
+          return resultadosOffline;
         }
       }
       
       return resultadosOffline;
     }
 
-    // Modo web normal: búsqueda online directa
     if (navigator.onLine) {
       try {
         const response = await axiosAuth.get(`/pedidos/filtrar-cliente?q=${encodeURIComponent(query)}`);
@@ -257,7 +278,6 @@ export function useOfflineCatalog() {
   const buscarProductos = async (query) => {
     if (!query || query.trim().length < 2) return [];
 
-    // Si es PWA, usar offline first
     if (isPWA) {
       const resultadosOffline = offlineManager.buscarProductosOffline(query);
       
@@ -266,7 +286,6 @@ export function useOfflineCatalog() {
         return resultadosOffline;
       }
       
-      // Si no hay resultados offline, intentar online como fallback
       if (navigator.onLine) {
         try {
           const response = await axiosAuth.get(`/pedidos/filtrar-producto?q=${encodeURIComponent(query)}`);
@@ -280,7 +299,6 @@ export function useOfflineCatalog() {
       return resultadosOffline;
     }
 
-    // Modo web normal: búsqueda online directa
     if (navigator.onLine) {
       try {
         const response = await axiosAuth.get(`/pedidos/filtrar-producto?q=${encodeURIComponent(query)}`);
@@ -299,8 +317,8 @@ export function useOfflineCatalog() {
     const clientes = offlineManager.getClientes();
     const productos = offlineManager.getProductos();
     
-    // Consideramos completo si tenemos una cantidad razonable
-    return clientes.length > 10 && productos.length > 10;
+    // Umbral optimizado para base real
+    return clientes.length > 100 && productos.length > 50;
   };
 
   // ✅ LIMPIAR CATÁLOGO OFFLINE
@@ -364,6 +382,10 @@ export function useOfflineCatalog() {
     buscarProductos,
     clearCatalog,
     
+    // ✅ NUEVAS FUNCIONES DE AUTO-ACTUALIZACIÓN
+    updateCatalogAfterOrder,
+    updateCatalogAfterSync,
+    
     // Funciones de utilidad
     loadStats,
     checkIfNeedsUpdate,
@@ -372,12 +394,13 @@ export function useOfflineCatalog() {
   };
 }
 
-// ✅ HOOK ESPECÍFICO PARA PEDIDOS OFFLINE
+// ✅ HOOK MEJORADO PARA PEDIDOS OFFLINE
 export function useOfflinePedidos() {
   const [pedidosPendientes, setPedidosPendientes] = useState([]);
   const [syncing, setSyncing] = useState(false);
 
   const isPWA = getAppMode() === 'pwa';
+  const { updateCatalogAfterSync } = useOfflineCatalog();
 
   useEffect(() => {
     if (isPWA) {
@@ -404,7 +427,7 @@ export function useOfflinePedidos() {
     return { success: false };
   };
 
-  // ✅ SINCRONIZAR PEDIDOS PENDIENTES
+  // ✅ SINCRONIZAR PEDIDOS PENDIENTES CON AUTO-ACTUALIZACIÓN
   const syncPedidosPendientes = async () => {
     if (!navigator.onLine) {
       toast.error('Sin conexión para sincronizar');
@@ -421,6 +444,8 @@ export function useOfflinePedidos() {
     let fallidos = 0;
 
     try {
+      console.log(`🔄 Sincronizando ${pedidosPendientes.length} pedidos pendientes...`);
+      
       for (const pedido of pedidosPendientes) {
         try {
           console.log(`🔄 Sincronizando pedido ${pedido.tempId}...`);
@@ -448,8 +473,13 @@ export function useOfflinePedidos() {
 
       loadPedidosPendientes();
 
+      // ✅ AUTO-ACTUALIZACIÓN DESPUÉS DE SINCRONIZAR
       if (exitosos > 0) {
         toast.success(`${exitosos} pedidos sincronizados correctamente`);
+        
+        // Actualizar catálogo después de sincronizar pedidos
+        console.log('🔄 Actualizando catálogo después de sincronización...');
+        await updateCatalogAfterSync();
       }
 
       if (fallidos > 0) {

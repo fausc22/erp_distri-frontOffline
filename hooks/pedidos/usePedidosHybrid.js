@@ -1,4 +1,4 @@
-// hooks/pedidos/usePedidosHybrid.js - VERSIÓN MEJORADA con timeout de 8-10 segundos
+// hooks/pedidos/usePedidosHybrid.js - VERSIÓN MEJORADA con auto-actualización post-pedidos
 import { useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { axiosAuth } from '../../utils/apiClient';
@@ -10,15 +10,17 @@ export function usePedidosHybrid() {
   const [pedidos, setPedidos] = useState([]);
 
   const appMode = getAppMode();
-  const { updateCatalogSilently } = useOfflineCatalog();
+  const { 
+    updateCatalogSilently, 
+    updateCatalogAfterOrder 
+  } = useOfflineCatalog();
 
-  // ✅ BUSCAR CLIENTES HÍBRIDO (Usa el nuevo sistema de catálogo completo)
+  // ✅ BUSCAR CLIENTES HÍBRIDO
   const buscarClientes = async (query) => {
     if (!query || query.trim().length < 2) {
       return [];
     }
 
-    // Modo PWA: Offline first con catálogo completo
     if (appMode === 'pwa') {
       const resultadosOffline = offlineManager.buscarClientesOffline(query);
       
@@ -27,21 +29,19 @@ export function usePedidosHybrid() {
         return resultadosOffline;
       }
       
-      // Si no hay resultados offline, intentar online como fallback
       if (navigator.onLine) {
         try {
           const response = await axiosAuth.get(`/pedidos/filtrar-cliente?q=${encodeURIComponent(query)}`);
           return response.data.success ? response.data.data : [];
         } catch (error) {
           console.error('❌ PWA: Error en búsqueda online de clientes:', error);
-          return resultadosOffline; // Devolver offline aunque sea vacío
+          return resultadosOffline;
         }
       }
       
       return resultadosOffline;
     }
 
-    // Modo Web: Online directo
     try {
       const response = await axiosAuth.get(`/pedidos/filtrar-cliente?q=${encodeURIComponent(query)}`);
       return response.data.success ? response.data.data : [];
@@ -52,13 +52,12 @@ export function usePedidosHybrid() {
     }
   };
 
-  // ✅ BUSCAR PRODUCTOS HÍBRIDO (Usa el nuevo sistema de catálogo completo)
+  // ✅ BUSCAR PRODUCTOS HÍBRIDO
   const buscarProductos = async (query) => {
     if (!query || query.trim().length < 2) {
       return [];
     }
 
-    // Modo PWA: Offline first con catálogo completo
     if (appMode === 'pwa') {
       const resultadosOffline = offlineManager.buscarProductosOffline(query);
       
@@ -67,21 +66,19 @@ export function usePedidosHybrid() {
         return resultadosOffline;
       }
       
-      // Si no hay resultados offline, intentar online como fallback
       if (navigator.onLine) {
         try {
           const response = await axiosAuth.get(`/pedidos/filtrar-producto?q=${encodeURIComponent(query)}`);
           return response.data.success ? response.data.data : [];
         } catch (error) {
           console.error('❌ PWA: Error en búsqueda online de productos:', error);
-          return resultadosOffline; // Devolver offline aunque sea vacío
+          return resultadosOffline;
         }
       }
       
       return resultadosOffline;
     }
 
-    // Modo Web: Online directo
     try {
       const response = await axiosAuth.get(`/pedidos/filtrar-producto?q=${encodeURIComponent(query)}`);
       return response.data.success ? response.data.data : [];
@@ -92,7 +89,7 @@ export function usePedidosHybrid() {
     }
   };
 
-  // ✅ REGISTRAR PEDIDO HÍBRIDO CON TIMEOUT MEJORADO DE 8-10 SEGUNDOS
+  // ✅ REGISTRAR PEDIDO HÍBRIDO CON AUTO-ACTUALIZACIÓN
   const registrarPedido = async (datosFormulario) => {
     const { cliente, productos, observaciones, empleado } = datosFormulario;
 
@@ -137,7 +134,7 @@ export function usePedidosHybrid() {
     setLoading(true);
 
     try {
-      // ✅ MODO WEB: Directo a DB
+      // ✅ MODO WEB: Directo a DB con auto-actualización
       if (appMode === 'web') {
         console.log('🌐 Web: Registrando pedido directamente');
         
@@ -146,12 +143,13 @@ export function usePedidosHybrid() {
         if (response.data.success) {
           toast.success('✅ Pedido registrado correctamente');
           
-          // Actualizar catálogo en vivo si hay internet
+          // ✅ AUTO-ACTUALIZACIÓN SILENCIOSA DESPUÉS DEL PEDIDO
           if (navigator.onLine) {
+            console.log('🔄 Actualizando catálogo después de pedido web...');
             try {
               await updateCatalogSilently();
             } catch (error) {
-              console.log('⚠️ No se pudo actualizar catálogo después del pedido');
+              console.log('⚠️ No se pudo actualizar catálogo después del pedido web');
             }
           }
           
@@ -162,7 +160,7 @@ export function usePedidosHybrid() {
         }
       }
 
-      // ✅ MODO PWA: Intentar online con timeout de 8-10 segundos, fallback offline
+      // ✅ MODO PWA: Intentar online con auto-actualización, fallback offline
       if (appMode === 'pwa') {
         console.log('📱 PWA: Intentando registrar pedido online con timeout de 8 segundos...');
         
@@ -172,7 +170,7 @@ export function usePedidosHybrid() {
         }
 
         try {
-          // ✅ TIMEOUT DE 8 SEGUNDOS COMO SOLICITASTE
+          // ✅ TIMEOUT DE 8 SEGUNDOS
           const timeoutPromise = new Promise((_, reject) => 
             setTimeout(() => reject(new Error('Timeout de 8 segundos')), 8000)
           );
@@ -185,11 +183,12 @@ export function usePedidosHybrid() {
             console.log('✅ PWA: Pedido registrado online exitosamente');
             toast.success('✅ Pedido registrado correctamente');
             
-            // Actualizar catálogo en vivo
+            // ✅ AUTO-ACTUALIZACIÓN ESPECÍFICA POST-PEDIDO
+            console.log('🔄 Actualizando catálogo después de pedido PWA...');
             try {
-              await updateCatalogSilently();
+              await updateCatalogAfterOrder();
             } catch (error) {
-              console.log('⚠️ No se pudo actualizar catálogo después del pedido');
+              console.log('⚠️ No se pudo actualizar catálogo después del pedido PWA');
             }
             
             return { success: true, pedidoId: response.data.pedidoId };
@@ -206,7 +205,6 @@ export function usePedidosHybrid() {
     } catch (error) {
       console.error('❌ Error inesperado registrando pedido:', error);
       
-      // PWA: Intentar guardar offline como último recurso
       if (appMode === 'pwa') {
         return await guardarPedidoOffline(pedidoData);
       }
@@ -218,7 +216,7 @@ export function usePedidosHybrid() {
     }
   };
 
-  // ✅ FUNCIÓN HELPER PARA GUARDAR OFFLINE (Mejorada)
+  // ✅ FUNCIÓN HELPER PARA GUARDAR OFFLINE
   const guardarPedidoOffline = async (pedidoData) => {
     try {
       const tempId = await offlineManager.savePedidoPendiente(pedidoData);
@@ -254,7 +252,7 @@ export function usePedidosHybrid() {
     }
   };
 
-  // ✅ CARGAR PEDIDOS (Sin cambios, compatible con ambos modos)
+  // ✅ CARGAR PEDIDOS
   const cargarPedidos = async () => {
     setLoading(true);
     try {
@@ -275,7 +273,7 @@ export function usePedidosHybrid() {
     }
   };
 
-  // ✅ OBTENER DETALLE DE PEDIDO (Sin cambios)
+  // ✅ OBTENER DETALLE DE PEDIDO
   const obtenerDetallePedido = async (pedidoId) => {
     setLoading(true);
     try {
@@ -295,7 +293,7 @@ export function usePedidosHybrid() {
     }
   };
 
-  // ✅ ACTUALIZAR ESTADO DE PEDIDO (Sin cambios)
+  // ✅ ACTUALIZAR ESTADO DE PEDIDO
   const actualizarEstadoPedido = async (pedidoId, nuevoEstado) => {
     setLoading(true);
     try {
@@ -318,7 +316,7 @@ export function usePedidosHybrid() {
     }
   };
 
-  // ✅ ELIMINAR PEDIDO (Sin cambios)
+  // ✅ ELIMINAR PEDIDO
   const eliminarPedido = async (pedidoId) => {
     setLoading(true);
     try {
@@ -357,11 +355,11 @@ export function usePedidosHybrid() {
     pedidos,
     appMode,
     
-    // ✅ FUNCIONES DE BÚSQUEDA HÍBRIDAS (MEJORADAS)
+    // ✅ FUNCIONES DE BÚSQUEDA HÍBRIDAS MEJORADAS
     buscarClientes,
     buscarProductos,
     
-    // Funciones de pedidos híbridas
+    // Funciones de pedidos híbridas con auto-actualización
     registrarPedido,
     cargarPedidos,
     obtenerDetallePedido,

@@ -1,14 +1,16 @@
-// components/AppInitializer.jsx - VERSIÓN CORREGIDA
+// components/AppInitializer.jsx - VERSIÓN MEJORADA con auto-actualización inteligente
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useOfflineCatalog } from '../hooks/useOfflineCatalog';
 import { getAppMode, offlineManager } from '../utils/offlineManager';
+import { connectionManager } from '../utils/ConnectionManager';
 
 export default function AppInitializer({ children }) {
   const [appReady, setAppReady] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [initStep, setInitStep] = useState('Iniciando...');
   const [isOnline, setIsOnline] = useState(true);
+  const [progress, setProgress] = useState(0);
   
   const router = useRouter();
   
@@ -16,45 +18,26 @@ export default function AppInitializer({ children }) {
     updateCatalogSilently,
     checkIfNeedsUpdate,
     getLastUpdateFormatted,
+    downloadFullCatalog,
     isPWA,
     stats
   } = useOfflineCatalog();
 
-  // ✅ MONITOREAR CONECTIVIDAD EN TIEMPO REAL
+  // ✅ MONITOREAR CONECTIVIDAD
   useEffect(() => {
-    const handleOnline = () => {
-      console.log('🌐 Conexión restaurada');
-      setIsOnline(true);
-      
-      // Si estamos en página offline y se restaura conexión, refrescar
-      if (router.pathname === '/offline-pedidos') {
-        setTimeout(() => {
-          router.push('/');
-        }, 2000);
-      }
+    const updateOnlineStatus = () => {
+      setIsOnline(navigator.onLine);
     };
     
-    const handleOffline = () => {
-      console.log('📴 Conexión perdida');
-      setIsOnline(false);
-      
-      // Si tenemos catálogo y perdemos conexión, ir a offline
-      if (isPWA && checkCatalogoCompleto() && router.pathname !== '/offline-pedidos' && router.pathname !== '/login') {
-        setTimeout(() => {
-          router.push('/offline-pedidos');
-        }, 1000);
-      }
-    };
-
     setIsOnline(navigator.onLine);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
     
     return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', updateOnlineStatus);
+      window.removeEventListener('offline', updateOnlineStatus);
     };
-  }, [router, isPWA]);
+  }, []);
 
   useEffect(() => {
     initializeApp();
@@ -64,6 +47,7 @@ export default function AppInitializer({ children }) {
     try {
       console.log('🚀 Inicializando aplicación...');
       setInitStep('Verificando entorno...');
+      setProgress(10);
       
       const appMode = getAppMode();
       console.log(`📱 Modo detectado: ${appMode}`);
@@ -73,6 +57,7 @@ export default function AppInitializer({ children }) {
         await initializePWA();
       } else {
         console.log('🌐 Modo Web normal');
+        setProgress(100);
         setAppReady(true);
         setInitializing(false);
       }
@@ -80,6 +65,7 @@ export default function AppInitializer({ children }) {
     } catch (error) {
       console.error('❌ Error inicializando app:', error);
       // ✅ SIEMPRE PERMITIR QUE LA APP ARRANQUE
+      setProgress(100);
       setAppReady(true);
       setInitializing(false);
     }
@@ -87,72 +73,143 @@ export default function AppInitializer({ children }) {
 
   const initializePWA = async () => {
     setInitStep('Verificando catálogo offline...');
+    setProgress(20);
     
     // ✅ 1. VERIFICAR CATÁLOGO LOCAL
     const catalogoDisponible = checkCatalogoCompleto();
     console.log(`📦 Catálogo completo disponible: ${catalogoDisponible}`);
     
+    setProgress(30);
+    
     // ✅ 2. VERIFICAR CONECTIVIDAD
     const currentlyOnline = navigator.onLine;
     console.log(`🌐 Estado de conexión: ${currentlyOnline ? 'ONLINE' : 'OFFLINE'}`);
     
-    // ✅ 3. DECIDIR FLUJO SEGÚN ESTADO
+    setProgress(40);
+    
+    // ✅ 3. FLUJO SEGÚN ESTADO
     if (!currentlyOnline && !catalogoDisponible) {
-      // Sin internet y sin catálogo -> Mostrar error y esperar conexión
-      setInitStep('Conexión requerida');
-      setAppReady(false);
-      setInitializing(false);
+      // Sin internet y sin catálogo -> Esperar conexión
+      setInitStep('Primera conexión requerida');
+      setProgress(50);
+      await waitForFirstConnection();
       return;
     }
     
     if (!currentlyOnline && catalogoDisponible) {
-      // Sin internet pero con catálogo -> Ir a modo offline
+      // Sin internet pero con catálogo -> Modo offline
       console.log('📱 Sin conexión pero con catálogo, modo offline disponible');
+      setInitStep('Modo offline listo');
+      setProgress(80);
+      
       setAppReady(true);
       setInitializing(false);
       
-      // ✅ REDIRIGIR A OFFLINE SOLO SI NO ESTAMOS EN LOGIN
-      if (router.pathname !== '/login' && router.pathname !== '/offline-pedidos') {
+      // Redirigir a offline solo si no estamos en login o ya en offline
+      if (router.pathname !== '/login' && !router.pathname.includes('offline')) {
         setTimeout(() => {
-          router.replace('/offline-pedidos');
+          router.replace('/inicio?mode=offline');
         }, 1000);
       }
+      
+      setProgress(100);
       return;
     }
     
-    // ✅ 4. ONLINE: App disponible inmediatamente
+    // ✅ 4. ONLINE: Disponible inmediatamente
     setInitStep('App lista');
+    setProgress(60);
     setAppReady(true);
     setInitializing(false);
     
-    // ✅ 5. AUTO-ACTUALIZACIÓN SILENCIOSA EN BACKGROUND (solo si online)
+    // ✅ 5. AUTO-ACTUALIZACIÓN INTELIGENTE EN BACKGROUND
     if (currentlyOnline) {
-      console.log('🔄 Iniciando auto-actualización silenciosa en background...');
-      setInitStep('Actualizando catálogo...');
+      await handleIntelligentUpdate();
+    }
+    
+    setProgress(100);
+  };
+
+  // ✅ AUTO-ACTUALIZACIÓN INTELIGENTE
+  const handleIntelligentUpdate = async () => {
+    try {
+      console.log('🧠 Iniciando auto-actualización inteligente...');
+      setInitStep('Verificando actualizaciones...');
       
-      // Sin await - se ejecuta en background
-      updateCatalogSilently().then(result => {
-        if (result.success) {
-          console.log('✅ Auto-actualización completada exitosamente');
-        } else {
-          console.log('⚠️ Auto-actualización falló (normal)');
-        }
-      }).catch(error => {
-        console.log('⚠️ Auto-actualización con error (normal):', error.message);
-      });
+      const needsUpdate = checkIfNeedsUpdate();
+      
+      if (needsUpdate) {
+        console.log('📥 Actualizaciones disponibles, descargando...');
+        setInitStep('Descargando catálogo actualizado...');
+        
+        // Actualización silenciosa sin bloquear la UI
+        updateCatalogSilently().then(result => {
+          if (result.success) {
+            console.log('✅ Auto-actualización completada exitosamente');
+            setInitStep('Catálogo actualizado');
+          } else {
+            console.log('⚠️ Auto-actualización falló (continuando normalmente)');
+          }
+        }).catch(error => {
+          console.log('⚠️ Auto-actualización con error (continuando):', error.message);
+        });
+      } else {
+        console.log('✅ Catálogo ya está actualizado');
+        setInitStep('Catálogo actualizado');
+      }
+      
+    } catch (error) {
+      console.log('⚠️ Error en auto-actualización inteligente:', error.message);
     }
   };
 
-  // ✅ VERIFICAR SI TENEMOS CATÁLOGO COMPLETO (más permisivo)
+  // ✅ ESPERAR PRIMERA CONEXIÓN PARA PWA NUEVA
+  const waitForFirstConnection = async () => {
+    return new Promise((resolve) => {
+      const checkConnection = async () => {
+        if (navigator.onLine) {
+          console.log('🌐 Primera conexión establecida, descargando catálogo...');
+          setInitStep('Descargando catálogo completo...');
+          setProgress(60);
+          
+          try {
+            await downloadFullCatalog();
+            setProgress(90);
+            setInitStep('Catálogo descargado');
+            
+            setAppReady(true);
+            setInitializing(false);
+            setProgress(100);
+            
+            resolve();
+          } catch (error) {
+            console.error('❌ Error en primera descarga:', error);
+            // Continuar de todos modos
+            setAppReady(true);
+            setInitializing(false);
+            setProgress(100);
+            resolve();
+          }
+        } else {
+          // Seguir esperando
+          setTimeout(checkConnection, 2000);
+        }
+      };
+      
+      checkConnection();
+    });
+  };
+
+  // ✅ VERIFICAR SI TENEMOS CATÁLOGO COMPLETO
   const checkCatalogoCompleto = () => {
     const clientes = offlineManager.getClientes();
     const productos = offlineManager.getProductos();
     
-    // ✅ UMBRAL MÁS BAJO para considerar "completo"
-    return clientes.length > 5 && productos.length > 5;
+    // Umbral para considerar "completo": al menos 100 clientes y 50 productos
+    return clientes.length >= 100 && productos.length >= 50;
   };
 
-  // ✅ LOADING SCREEN MEJORADO
+  // ✅ COMPONENTE DE LOADING MEJORADO
   if (initializing || !appReady) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center">
@@ -164,7 +221,7 @@ export default function AppInitializer({ children }) {
           </div>
 
           {/* ✅ DIFERENTES ESTADOS */}
-          {initStep === 'Conexión requerida' ? (
+          {initStep === 'Primera conexión requerida' ? (
             <div className="bg-red-500 bg-opacity-20 border border-red-400 rounded-lg p-6 mb-6">
               <div className="text-red-100 mb-4">
                 <svg className="w-12 h-12 mx-auto mb-3" fill="currentColor" viewBox="0 0 20 20">
@@ -178,23 +235,17 @@ export default function AppInitializer({ children }) {
               
               {/* ✅ INDICADOR DE CONECTIVIDAD */}
               <div className="flex items-center justify-center mb-4">
-                <div className={`w-3 h-3 rounded-full mr-2 ${isOnline ? 'bg-green-400' : 'bg-red-400'}`}></div>
+                <div className={`w-3 h-3 rounded-full mr-2 ${isOnline ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`}></div>
                 <span className="text-sm">
-                  {isOnline ? 'Conectado - Refrescando...' : 'Sin conexión'}
+                  {isOnline ? 'Detectando conexión...' : 'Sin conexión'}
                 </span>
               </div>
               
-              <button 
-                onClick={() => window.location.reload()}
-                disabled={!isOnline}
-                className={`px-4 py-2 rounded transition-colors ${
-                  isOnline 
-                    ? 'bg-green-600 hover:bg-green-700 text-white' 
-                    : 'bg-gray-500 text-gray-300 cursor-not-allowed'
-                }`}
-              >
-                {isOnline ? 'Reintentar Ahora' : 'Esperando conexión...'}
-              </button>
+              {isOnline && (
+                <div className="text-sm text-green-200">
+                  ✅ Conexión detectada - Descargando catálogo...
+                </div>
+              )}
             </div>
           ) : (
             <div className="mb-6">
@@ -214,6 +265,14 @@ export default function AppInitializer({ children }) {
             </div>
           )}
 
+          {/* ✅ BARRA DE PROGRESO */}
+          <div className="w-full bg-blue-700 rounded-full h-3 mb-4">
+            <div 
+              className="bg-white h-3 rounded-full transition-all duration-500 ease-out"
+              style={{ width: `${progress}%` }}
+            ></div>
+          </div>
+
           {/* ✅ INFORMACIÓN DE DEBUG EN DESARROLLO */}
           {process.env.NODE_ENV === 'development' && stats && (
             <div className="mt-6 text-xs text-blue-300 bg-blue-800 bg-opacity-50 rounded p-3">
@@ -223,21 +282,37 @@ export default function AppInitializer({ children }) {
               <p>🌐 Online: {isOnline ? 'Sí' : 'No'}</p>
               <p>📦 Catálogo completo: {checkCatalogoCompleto() ? 'Sí' : 'No'}</p>
               <p>📍 Ruta actual: {router.pathname}</p>
+              <p>🔄 Progreso: {progress}%</p>
             </div>
           )}
 
-          {/* ✅ INDICADOR DE PROGRESO */}
-          <div className="w-full bg-blue-700 rounded-full h-2 mt-4">
-            <div 
-              className="bg-white h-2 rounded-full transition-all duration-300"
-              style={{ 
-                width: initStep === 'Conexión requerida' ? '100%' : 
-                       initStep === 'App lista' ? '100%' : 
-                       initStep === 'Actualizando catálogo...' ? '75%' :
-                       initStep === 'Verificando catálogo offline...' ? '50%' : '25%'
-              }}
-            ></div>
+          {/* ✅ PASOS DE INICIALIZACIÓN */}
+          <div className="text-xs text-blue-300 mt-4">
+            <div className="grid grid-cols-2 gap-2">
+              <div className={`p-2 rounded ${progress >= 20 ? 'bg-green-600' : 'bg-blue-700'}`}>
+                {progress >= 20 ? '✅' : '⏳'} Verificando catálogo
+              </div>
+              <div className={`p-2 rounded ${progress >= 40 ? 'bg-green-600' : 'bg-blue-700'}`}>
+                {progress >= 40 ? '✅' : '⏳'} Verificando conexión
+              </div>
+              <div className={`p-2 rounded ${progress >= 60 ? 'bg-green-600' : 'bg-blue-700'}`}>
+                {progress >= 60 ? '✅' : '⏳'} Preparando app
+              </div>
+              <div className={`p-2 rounded ${progress >= 100 ? 'bg-green-600' : 'bg-blue-700'}`}>
+                {progress >= 100 ? '✅' : '⏳'} Listo
+              </div>
+            </div>
           </div>
+
+          {/* ✅ TIPS PARA USUARIOS */}
+          {isPWA && (
+            <div className="mt-6 text-xs text-blue-300 bg-blue-800 bg-opacity-30 rounded p-3">
+              <p className="font-semibold mb-2">💡 Tips para PWA:</p>
+              <p>• Funciona sin internet después de la primera carga</p>
+              <p>• Los pedidos se guardan localmente cuando no hay conexión</p>
+              <p>• Se sincroniza automáticamente al recuperar internet</p>
+            </div>
+          )}
         </div>
       </div>
     );
