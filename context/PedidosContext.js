@@ -32,6 +32,30 @@ function pedidosReducer(state, action) {
         productos: [...state.productos, nuevoProducto]
       };
     
+    // ✅ NUEVA ACCIÓN PARA MÚLTIPLES PRODUCTOS
+    case 'ADD_MULTIPLE_PRODUCTOS':
+      const nuevosProductos = action.payload.map(producto => {
+        const subtotalSinIva = parseFloat((producto.cantidad * producto.precio).toFixed(2));
+        const porcentajeIva = producto.iva || producto.porcentaje_iva || 21;
+        const ivaCalculado = parseFloat((subtotalSinIva * (porcentajeIva / 100)).toFixed(2));
+        
+        return {
+          id: producto.id,
+          nombre: producto.nombre,
+          unidad_medida: producto.unidad_medida || 'Unidad',
+          cantidad: producto.cantidad,
+          precio: parseFloat(producto.precio),
+          porcentaje_iva: porcentajeIva,
+          iva_calculado: ivaCalculado,
+          subtotal: subtotalSinIva
+        };
+      });
+      
+      return {
+        ...state,
+        productos: [...state.productos, ...nuevosProductos]
+      };
+    
     case 'REMOVE_PRODUCTO':
       return {
         ...state,
@@ -101,6 +125,11 @@ export function PedidosProvider({ children }) {
         // El porcentaje de IVA ya viene en producto.iva desde la DB
       };
       dispatch({ type: 'ADD_PRODUCTO', payload: productoConCantidad });
+    },
+    
+    // ✅ NUEVA FUNCIÓN PARA MÚLTIPLES PRODUCTOS
+    addMultipleProductos: (productos) => {
+      dispatch({ type: 'ADD_MULTIPLE_PRODUCTOS', payload: productos });
     },
     
     removeProducto: (index) => dispatch({ type: 'REMOVE_PRODUCTO', payload: index }),

@@ -28,8 +28,8 @@ function RegistrarPedidoContent() {
     clearPedido,
     getDatosPedido,
     setCliente,
-    // ✅ Nuevas funciones para restaurar datos
-    setObservaciones
+    setObservaciones,
+    addMultipleProductos // ✅ NUEVA FUNCIÓN
   } = usePedidosContext();
  
   const { registrarPedido, loading, appMode, isPWA } = usePedidosHybrid();
@@ -62,7 +62,7 @@ function RegistrarPedidoContent() {
   // ✅ ESTADO DE UI ADAPTATIVA
   const [uiTheme, setUiTheme] = useState('online');
   const [showConnectionChange, setShowConnectionChange] = useState(false);
-  const [showBackupButton, setShowBackupButton] = useState(false); // ✅ CONTROL INTELIGENTE DEL BACKUP
+  const [showBackupButton, setShowBackupButton] = useState(false);
 
   // ✅ NOTIFICAR AL CONNECTION MANAGER QUE ESTAMOS TRABAJANDO
   useEffect(() => {
@@ -73,7 +73,7 @@ function RegistrarPedidoContent() {
     };
   }, [setUserWorkingState]);
 
-  // ✅ MANEJO DE EVENTOS DE CONECTIVIDAD
+  // ✅ MANEJO DE EVENTOS DE CONECTIVIDAD - MODIFICADO
   useEffect(() => {
     if (!eventType) return;
 
@@ -87,6 +87,11 @@ function RegistrarPedidoContent() {
         // Guardar formulario inmediatamente
         saveOnConnectivityChange();
         
+        // ✅ MOSTRAR BOTÓN DE BACKUP EN TRANSICIÓN
+        if (hasSavedForm()) {
+          setShowBackupButton(true);
+        }
+        
         setTimeout(() => setShowConnectionChange(false), 3000);
         break;
         
@@ -96,7 +101,7 @@ function RegistrarPedidoContent() {
         setUiTheme('online');
         setShowConnectionChange(true);
         
-        // ✅ MOSTRAR BACKUP SOLO EN ESTA TRANSICIÓN ESPECÍFICA
+        // ✅ MOSTRAR BOTÓN DE BACKUP EN TRANSICIÓN
         if (hasSavedForm()) {
           setShowBackupButton(true);
         }
@@ -107,67 +112,52 @@ function RegistrarPedidoContent() {
       default:
         break;
     }
-  }, [eventType, saveOnConnectivityChange]);
+  }, [eventType, saveOnConnectivityChange, hasSavedForm]);
 
-  // ✅ RESTAURAR BACKUP Y LIMPIAR BOTÓN
+  // ✅ RESTAURAR BACKUP MEJORADO - INCLUYE PRODUCTOS
   const handleRestoreBackup = () => {
     const savedData = restoreForm();
     
     if (savedData) {
-      // Restaurar datos al contexto silenciosamente
+      let itemsRestored = [];
+      
+      // ✅ RESTAURAR CLIENTE
       if (savedData.cliente) {
         setCliente(savedData.cliente);
+        itemsRestored.push('cliente');
       }
       
+      // ✅ RESTAURAR OBSERVACIONES
       if (savedData.observaciones) {
         setObservaciones(savedData.observaciones);
+        itemsRestored.push('observaciones');
       }
       
-      console.log('🔄 Backup restaurado silenciosamente');
+      // ✅ RESTAURAR PRODUCTOS
+      if (savedData.productos && savedData.productos.length > 0) {
+        addMultipleProductos(savedData.productos);
+        itemsRestored.push(`${savedData.productos.length} productos`);
+      }
+      
+      // Toast informativo
+      if (itemsRestored.length > 0) {
+        toast.success(`📄 Formulario restaurado: ${itemsRestored.join(', ')}`, {
+          duration: 4000
+        });
+      }
+      
+      console.log('🔄 Backup restaurado completamente:', itemsRestored);
     }
     
     // Ocultar botón después de usar
     setShowBackupButton(false);
+    clearSavedForm(); // Limpiar backup después de restaurar
   };
-  useEffect(() => {
-    const checkAndRestoreForm = async () => {
-      if (hasSavedForm()) {
-        const savedInfo = getSavedFormInfo();
-        console.log('🔄 Backup encontrado:', savedInfo);
-        
-        // Solo restaurar si el formulario actual está vacío
-        const isCurrentFormEmpty = !cliente && productos.length === 0 && !observaciones.trim();
-        
-        if (isCurrentFormEmpty) {
-          const savedData = restoreForm();
-          
-          if (savedData) {
-            // Restaurar datos al contexto
-            if (savedData.cliente) {
-              setCliente(savedData.cliente);
-            }
-            
-            if (savedData.observaciones) {
-              setObservaciones(savedData.observaciones);
-            }
-            
-            // Los productos son más complejos de restaurar, 
-            // por ahora solo notificar al usuario
-            if (savedData.productos?.length > 0) {
-              toast.success(`📄 Formulario restaurado: ${savedData.productos.length} productos`, {
-                duration: 4000
-              });
-            }
-          }
-        }
-      }
-    };
-    
-    // Pequeño delay para que el contexto se inicialice
-    setTimeout(checkAndRestoreForm, 1000);
-  }, []);
 
-  // ✅ AUTO-SAVE PERIÓDICO
+  // ✅ ELIMINAR TODA LA LÓGICA DE AUTO-RESTORE
+  // (Se elimina el useEffect de checkAndRestoreForm)
+
+  // ✅ AUTO-SAVE PERIÓDICO MEJORADO
   useEffect(() => {
     if (cliente || productos.length > 0 || observaciones.trim()) {
       const autoSaveInterval = setInterval(() => {
@@ -362,26 +352,17 @@ function RegistrarPedidoContent() {
           )}
         </div>
 
-        {/* ✅ MENSAJE INFORMATIVO DINÁMICO */}
-        {isPWA && (uiTheme === 'offline' || !isOnline) && (
-          <div className="mb-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
-            <div className="flex items-center">
-              <div className="text-orange-600 mr-2">📱</div>
-              <div className="text-sm text-orange-800">
-                <strong>Modo Offline:</strong> Los pedidos se guardarán localmente y se subirán cuando se recupere la conexión.
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ✅ BOTÓN DE BACKUP INTELIGENTE (Solo en transición específica) */}
+        {/* ✅ BOTÓN DE BACKUP INTELIGENTE (Solo en transiciones específicas) */}
         {showBackupButton && hasSavedForm() && (
           <div className="mb-4 flex justify-center">
             <button
               onClick={handleRestoreBackup}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
             >
-              📄 RESTAURAR VENTA ANTERIOR PENDIENTE
+              📄 RESTAURAR FORMULARIO ANTERIOR
+              <span className="text-sm bg-blue-700 px-2 py-1 rounded">
+                {getSavedFormInfo()?.formattedAge || 'Reciente'}
+              </span>
             </button>
           </div>
         )}
