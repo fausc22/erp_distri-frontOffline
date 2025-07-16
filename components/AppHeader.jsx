@@ -6,7 +6,7 @@ import { FiX, FiMenu, FiWifi, FiWifiOff } from 'react-icons/fi';
 import Head from 'next/head';
 import { getAppMode } from '../utils/offlineManager';
 import { useConnection } from '../utils/ConnectionManager';
-
+import { LinkGuard } from './OfflineGuard'; // Solo LinkGuard
 
 function AppHeader() {
   const [showMenu, setShowMenu] = useState(false);
@@ -18,6 +18,15 @@ function AppHeader() {
 
   // ✅ CONNECTION MANAGER (solo para indicadores visuales)
   const { isOnline } = useConnection();
+
+  // ✅ COMPONENTE LINK SIMPLIFICADO - MOVER AL INICIO
+  const MenuLink = ({ href, className, children }) => {
+    return (
+      <LinkGuard href={href} className={className} onClick={handleMenuItemClick}>
+        {children}
+      </LinkGuard>
+    );
+  };
 
   useEffect(() => {
     // Obtener rol y datos del empleado
@@ -82,8 +91,6 @@ function AppHeader() {
     }
     return 'Usuario';
   };
-
-  
 
   // ✅ VARIANTES DE ANIMACIÓN
   const subMenuVariants = {
