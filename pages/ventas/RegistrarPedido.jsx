@@ -19,7 +19,7 @@ import {
   ModalConfirmacionSalidaPedidos 
 } from '../../components/pedidos/ModalesConfirmacion';
 
-// ✅ NUEVO MODAL
+// ✅ MODAL DE RECONEXIÓN
 import ModalConexionRestablecida from '../../components/pedidos/ModalConexionRestablecida';
 
 function RegistrarPedidoContent() {
@@ -43,12 +43,13 @@ function RegistrarPedidoContent() {
   const [mostrarConfirmacionSalida, setMostrarConfirmacionSalida] = useState(false);
   const [catalogStats, setCatalogStats] = useState(null);
   
-  // ✅ NUEVO ESTADO: Modal de reconexión y modo forzado offline
+  // ✅ ESTADOS DE CONTROL ESTRICTO
   const [mostrarModalReconexion, setMostrarModalReconexion] = useState(false);
   const [modoForzadoOffline, setModoForzadoOffline] = useState(false);
   const [loadingConexion, setLoadingConexion] = useState(false);
+  const [interfazLocked, setInterfazLocked] = useState(false); // Nueva: evitar cambios automáticos
 
-  // ✅ CONNECTION MANAGER - Sin redirecciones automáticas
+  // ✅ CONNECTION MANAGER - Solo para estado, NO para cambios automáticos
   const { isOnline, eventType, checkOnDemand } = useConnection();
   const isPWA = getAppMode() === 'pwa';
 
@@ -69,31 +70,42 @@ function RegistrarPedidoContent() {
     totalProductos
   });
 
-  // ✅ DETECTAR MODO INICIAL (si la página carga sin conexión, forzar offline)
+  // ✅ DETECTAR MODO INICIAL Y LOCKEAR INTERFAZ
   useEffect(() => {
     if (isPWA && !isOnline) {
-      console.log('📱 Página cargada sin conexión - Forzando modo offline estable');
+      console.log('📱 [RegistrarPedido] Página cargada OFFLINE - Activando modo offline estable PERMANENTE');
       setModoForzadoOffline(true);
+      setInterfazLocked(true); // ✅ NUEVO: Bloquear cambios automáticos
+    } else if (isPWA && isOnline) {
+      console.log('🌐 [RegistrarPedido] Página cargada ONLINE - Modo online inicial');
+      setModoForzadoOffline(false);
+      setInterfazLocked(false);
     }
-  }, []);
+  }, []); // ✅ Solo ejecutar UNA VEZ al cargar
 
   // ✅ CARGAR ESTADÍSTICAS PWA
   useEffect(() => {
     if (isPWA) {
       const stats = offlineManager.getStorageStats();
       setCatalogStats(stats);
-      console.log('📊 Estadísticas del catálogo:', stats);
+      console.log('📊 [RegistrarPedido] Estadísticas del catálogo:', stats);
     }
   }, [isPWA]);
 
-  // ✅ MANEJO DE EVENTOS DE CONECTIVIDAD - SOLO ACTUALIZACIONES DE UI
+  // ✅ MANEJO DE EVENTOS DE CONECTIVIDAD - SOLO LOGGING, NUNCA CAMBIOS AUTOMÁTICOS
   useEffect(() => {
     if (!eventType) return;
 
+    // ✅ SI LA INTERFAZ ESTÁ BLOQUEADA, NO HACER NADA
+    if (interfazLocked) {
+      console.log(`🔒 [RegistrarPedido] Evento ${eventType} ignorado - Interfaz bloqueada en modo estable`);
+      return;
+    }
+
     switch (eventType) {
       case 'connection_lost':
-        console.log('📴 Conexión perdida detectada en RegistrarPedido');
-        // Solo actualizar estadísticas - NO cambiar de página
+        console.log('📴 [RegistrarPedido] Conexión perdida detectada - SOLO LOGGING, SIN CAMBIOS');
+        // ✅ SOLO actualizar estadísticas
         if (isPWA) {
           const stats = offlineManager.getStorageStats();
           setCatalogStats(stats);
@@ -101,8 +113,8 @@ function RegistrarPedidoContent() {
         break;
         
       case 'connection_restored':
-        console.log('🌐 Conexión restaurada detectada en RegistrarPedido');
-        // Solo actualizar estadísticas - NO cambiar de página ni mostrar modal automáticamente
+        console.log('🌐 [RegistrarPedido] Conexión restaurada detectada - SOLO LOGGING, SIN CAMBIOS');
+        // ✅ SOLO actualizar estadísticas
         if (isPWA) {
           const stats = offlineManager.getStorageStats();
           setCatalogStats(stats);
@@ -112,7 +124,7 @@ function RegistrarPedidoContent() {
       default:
         break;
     }
-  }, [eventType, isPWA]);
+  }, [eventType, isPWA, interfazLocked]);
 
   // ✅ AUTO-RESTORE DE BACKUP
   useEffect(() => {
@@ -173,7 +185,7 @@ function RegistrarPedidoContent() {
     setMostrarConfirmacion(true);
   };
 
-  // ✅ NUEVA LÓGICA: Registrar pedido y verificar conexión después
+  // ✅ REGISTRAR PEDIDO CON VERIFICACIÓN POST-GUARDADO
   const handleRegistrarPedido = async () => {
     const datosPedido = getDatosPedido();
     const datosCompletos = {
@@ -181,7 +193,7 @@ function RegistrarPedidoContent() {
       empleado: user
     };
     
-    console.log(`🔄 Registrando pedido en modo ${isOnline && !modoForzadoOffline ? 'online' : 'offline'}...`);
+    console.log(`🔄 [RegistrarPedido] Registrando pedido - Modo forzado offline: ${modoForzadoOffline}`);
     
     const resultado = await registrarPedido(datosCompletos);
     
@@ -196,19 +208,27 @@ function RegistrarPedidoContent() {
         setCatalogStats(newStats);
       }
       
-      // ✅ NUEVA LÓGICA: Si el pedido se guardó offline, verificar conexión
+      // ✅ LÓGICA PRINCIPAL: Verificar conexión solo después de guardar offline
       if (resultado.offline || modoForzadoOffline) {
-        console.log('📱 Pedido guardado offline, verificando si hay conexión disponible...');
+        console.log('📱 [RegistrarPedido] Pedido guardado offline - Verificando conexión disponible...');
         
-        // Verificar conexión en demanda
+        // ✅ Verificar conexión bajo demanda
         const hayConexion = await checkOnDemand();
         
         if (hayConexion && !modoForzadoOffline) {
-          // ✅ HAY CONEXIÓN: Mostrar modal de reconexión
-          console.log('🌐 Conexión disponible después de guardar offline - Mostrando modal');
+          // ✅ HAY CONEXIÓN pero no estamos en modo forzado: Mostrar modal
+          console.log('🌐 [RegistrarPedido] Conexión disponible - Mostrando modal de reconexión');
           setMostrarModalReconexion(true);
+        } else if (hayConexion && modoForzadoOffline) {
+          // ✅ HAY CONEXIÓN pero estamos en modo forzado: Solo toast offline
+          console.log('🔒 [RegistrarPedido] Conexión disponible pero modo forzado - Solo toast offline');
+          toast.success('📱 Pedido guardado offline - Se subirá cuando vayas al menú', {
+            duration: 4000,
+            icon: '📱'
+          });
         } else {
           // ✅ SIN CONEXIÓN: Toast normal de offline
+          console.log('📴 [RegistrarPedido] Sin conexión - Toast offline normal');
           toast.success('📱 Pedido guardado offline - Se subirá cuando haya conexión', {
             duration: 4000,
             icon: '📱'
@@ -216,22 +236,25 @@ function RegistrarPedidoContent() {
         }
       } else {
         // ✅ PEDIDO ONLINE: Toast normal
+        console.log('🌐 [RegistrarPedido] Pedido registrado online');
         toast.success('✅ Pedido registrado exitosamente');
       }
     } else {
-      console.error('❌ Error registrando pedido:', resultado.error);
+      console.error('❌ [RegistrarPedido] Error registrando pedido:', resultado.error);
     }
   };
 
-  // ✅ NUEVA FUNCIÓN: Manejar "Ir a Menú" del modal de reconexión
+  // ✅ MANEJAR "IR A MENÚ" DEL MODAL DE RECONEXIÓN
   const handleIrAMenuDesdeModal = async () => {
     setLoadingConexion(true);
+    
+    console.log('🔍 [RegistrarPedido] Verificando conexión para ir al menú desde modal...');
     
     // Verificar conexión antes de ir al menú
     const hayConexion = await checkOnDemand();
     
     if (hayConexion) {
-      console.log('🌐 Conexión confirmada - Redirigiendo al menú');
+      console.log('🌐 [RegistrarPedido] Conexión confirmada desde modal - Redirigiendo al menú');
       setMostrarModalReconexion(false);
       
       // Guardar formulario antes de salir
@@ -241,7 +264,7 @@ function RegistrarPedidoContent() {
       
       window.location.href = '/inicio';
     } else {
-      console.log('📴 Sin conexión - No se puede ir al menú');
+      console.log('📴 [RegistrarPedido] Sin conexión desde modal - No se puede ir al menú');
       setLoadingConexion(false);
       setMostrarModalReconexion(false);
       
@@ -252,19 +275,20 @@ function RegistrarPedidoContent() {
     }
   };
 
-  // ✅ NUEVA FUNCIÓN: Manejar "Seguir Registrando" del modal de reconexión
+  // ✅ MANEJAR "SEGUIR REGISTRANDO" DEL MODAL DE RECONEXIÓN
   const handleSeguirRegistrandoDesdeModal = () => {
-    console.log('📱 Usuario eligió seguir registrando offline');
-    setModoForzadoOffline(true); // Forzar modo offline estable
+    console.log('📱 [RegistrarPedido] Usuario eligió seguir registrando - Activando modo offline estable');
+    setModoForzadoOffline(true);
+    setInterfazLocked(true); // ✅ BLOQUEAR interfaz automáticamente
     setMostrarModalReconexion(false);
     
-    toast.success('📱 Continuando en modo offline estable', {
-      duration: 3000,
-      icon: '📱'
+    toast.success('📱 Modo offline estable activado - Sin interrupciones automáticas', {
+      duration: 4000,
+      icon: '🔒'
     });
   };
 
-  // ✅ MODIFICAR: Manejar "Volver al Inicio" con verificación de conexión
+  // ✅ MANEJAR "VOLVER AL INICIO" CON VERIFICACIÓN
   const handleConfirmarSalida = () => {
     if (cliente || productos.length > 0 || observaciones.trim()) {
       setMostrarConfirmacionSalida(true);
@@ -273,9 +297,9 @@ function RegistrarPedidoContent() {
     }
   };
 
-  // ✅ NUEVA FUNCIÓN: Salir con verificación de conexión
+  // ✅ SALIR CON VERIFICACIÓN DE CONEXIÓN
   const handleSalirConVerificacion = async () => {
-    console.log('🚪 Intentando salir - Verificando conexión...');
+    console.log('🚪 [RegistrarPedido] Intentando salir - Verificando conexión...');
     
     setLoadingConexion(true);
     
@@ -283,7 +307,7 @@ function RegistrarPedidoContent() {
     const hayConexion = await checkOnDemand();
     
     if (hayConexion) {
-      console.log('🌐 Conexión confirmada - Redirigiendo al menú');
+      console.log('🌐 [RegistrarPedido] Conexión confirmada para salir - Redirigiendo al menú');
       
       // Guardar formulario antes de salir
       if (cliente || productos.length > 0 || observaciones.trim()) {
@@ -292,7 +316,7 @@ function RegistrarPedidoContent() {
       
       window.location.href = '/inicio';
     } else {
-      console.log('📴 Sin conexión - Manteniendo en formulario offline');
+      console.log('📴 [RegistrarPedido] Sin conexión para salir - Manteniendo en formulario offline');
       setLoadingConexion(false);
       
       toast.error('📴 Sin conexión - No se puede acceder al menú. Continúa trabajando offline.', {
@@ -310,20 +334,22 @@ function RegistrarPedidoContent() {
     handleSalirConVerificacion();
   };
 
-  // ✅ DETERMINAR ESTADO DE INTERFAZ (offline forzado o estado real)
+  // ✅ DETERMINAR ESTADO DE INTERFAZ (con bloqueo)
   const getInterfaceState = () => {
-    if (modoForzadoOffline) {
+    if (modoForzadoOffline || interfazLocked) {
       return {
         isOffline: true,
         showAsOffline: true,
-        canGoOnline: false
+        canGoOnline: false,
+        locked: true
       };
     }
     
     return {
       isOffline: !isOnline,
       showAsOffline: !isOnline,
-      canGoOnline: isOnline
+      canGoOnline: isOnline,
+      locked: false
     };
   };
 
@@ -346,7 +372,7 @@ function RegistrarPedidoContent() {
     if (!isPWA) return 'NUEVO PEDIDO';
     
     if (modoForzadoOffline) {
-      return '📱 NUEVO PEDIDO (MODO OFFLINE ESTABLE)';
+      return '🔒 NUEVO PEDIDO (MODO OFFLINE ESTABLE)';
     }
     
     return interfaceState.showAsOffline 
@@ -358,7 +384,7 @@ function RegistrarPedidoContent() {
     if (!isPWA) return 'Sistema de gestión de pedidos';
     
     if (modoForzadoOffline) {
-      return 'Modo offline estable - Sin interrupciones por reconexión';
+      return 'Modo offline estable - Sin interrupciones por reconexión automática';
     }
     
     return interfaceState.showAsOffline
@@ -370,12 +396,12 @@ function RegistrarPedidoContent() {
     <div className={`flex flex-col items-center justify-center min-h-screen ${getPageTheme()} p-4`}>
       <Head>
         <title>VERTIMAR | REGISTRAR PEDIDO</title>
-        <meta name="description" content="Sistema universal de registro de pedidos online/offline" />
+        <meta name="description" content="Sistema ultra estable de registro de pedidos online/offline" />
       </Head>
       
       <div className="bg-white shadow-lg rounded-lg p-6 w-full max-w-6xl">
         
-        {/* ✅ HEADER MEJORADO */}
+        {/* ✅ HEADER ULTRA ESTABLE */}
         <div className={`bg-gradient-to-r ${getHeaderTheme()} text-white rounded-lg p-6 mb-6`}>
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
             <div>
@@ -386,7 +412,7 @@ function RegistrarPedidoContent() {
                 {getHeaderSubtitle()}
               </p>
               
-              {/* ✅ INDICADOR DE ESTADO MEJORADO */}
+              {/* ✅ INDICADOR DE ESTADO ULTRA DETALLADO */}
               {isPWA && (
                 <div className="flex items-center gap-2 mt-2">
                   <div className={`w-3 h-3 rounded-full ${
@@ -396,10 +422,10 @@ function RegistrarPedidoContent() {
                     interfaceState.showAsOffline ? 'text-orange-200' : 'text-green-200'
                   }`}>
                     {modoForzadoOffline 
-                      ? 'Modo offline estable - Sin auto-reconexión'
+                      ? '🔒 Modo offline estable - Bloqueado contra cambios automáticos'
                       : interfaceState.showAsOffline 
-                        ? 'Sin conexión - Guardado local'
-                        : 'Conectado - Guardado directo'
+                        ? '📴 Sin conexión - Guardado local'
+                        : '🌐 Conectado - Guardado directo'
                     }
                   </span>
                 </div>
@@ -407,16 +433,18 @@ function RegistrarPedidoContent() {
             </div>
             
             <div className="mt-4 md:mt-0 text-right">
-              {/* ✅ BOTÓN PARA CAMBIAR MODO (solo si hay conexión disponible) */}
+              {/* ✅ BOTÓN PARA DESBLOQUEAR MODO (solo si hay conexión disponible) */}
               {isPWA && modoForzadoOffline && isOnline && (
                 <button
                   onClick={() => {
+                    console.log('🔓 [RegistrarPedido] Usuario desbloqueó modo offline manualmente');
                     setModoForzadoOffline(false);
-                    toast.success('🌐 Modo online reactivado', { duration: 3000 });
+                    setInterfazLocked(false);
+                    toast.success('🌐 Modo online reactivado manualmente', { duration: 3000 });
                   }}
                   className="mb-2 bg-white bg-opacity-20 hover:bg-opacity-30 px-3 py-1 rounded text-sm transition-colors"
                 >
-                  🌐 Activar Modo Online
+                  🔓 Desbloquear Modo Online
                 </button>
               )}
               
@@ -432,14 +460,14 @@ function RegistrarPedidoContent() {
           </div>
         </div>
 
-        {/* ✅ INFORMACIÓN PWA OFFLINE MEJORADA */}
+        {/* ✅ INFORMACIÓN PWA OFFLINE ULTRA DETALLADA */}
         {isPWA && interfaceState.showAsOffline && catalogStats && (
           <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
             <h3 className="font-semibold text-orange-800 mb-2 flex items-center gap-2">
               📦 Catálogo Offline Disponible
               {modoForzadoOffline && (
                 <span className="bg-orange-200 text-orange-800 px-2 py-1 rounded text-xs font-medium">
-                  MODO ESTABLE
+                  🔒 MODO ESTABLE ACTIVO
                 </span>
               )}
             </h3>
@@ -469,8 +497,9 @@ function RegistrarPedidoContent() {
             )}
             
             {modoForzadoOffline && (
-              <div className="mt-2 text-sm text-orange-700">
-                🔒 Modo offline estable activado - La interfaz no cambiará automáticamente aunque haya conexión
+              <div className="mt-2 text-sm text-orange-700 font-medium bg-orange-100 p-2 rounded">
+                🔒 <strong>Modo estable activado:</strong> La interfaz permanecerá offline aunque se recupere la conexión. 
+                Los cambios automáticos están bloqueados para garantizar estabilidad total.
               </div>
             )}
           </div>
@@ -488,7 +517,7 @@ function RegistrarPedidoContent() {
         {/* ✅ OBSERVACIONES */}
         <ObservacionesPedido />
         
-        {/* ✅ RESUMEN Y BOTONES MEJORADOS */}
+        {/* ✅ RESUMEN Y BOTONES ULTRA ESTABLES */}
         <div className={`mt-6 p-4 rounded-lg border ${
           interfaceState.showAsOffline ? 'bg-orange-50 border-orange-200' : 'bg-gray-50 border-gray-200'
         }`}>
@@ -501,7 +530,7 @@ function RegistrarPedidoContent() {
                   interfaceState.showAsOffline ? 'text-orange-600' : 'text-blue-600'
                 }`}>
                   {modoForzadoOffline 
-                    ? '🔒 PWA Offline Estable (se sincronizará en menú)'
+                    ? '🔒 PWA Offline Estable Bloqueado (se sincronizará en menú)'
                     : interfaceState.showAsOffline 
                       ? '📱 PWA Offline (se sincronizará)'
                       : isPWA
@@ -564,7 +593,7 @@ function RegistrarPedidoContent() {
           </div>
         </div>
 
-        {/* ✅ INFORMACIÓN ADICIONAL MEJORADA */}
+        {/* ✅ INFORMACIÓN ADICIONAL ULTRA DETALLADA */}
         {isPWA && interfaceState.showAsOffline && (
           <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
             <h4 className="font-semibold text-yellow-800 mb-2">
@@ -576,11 +605,13 @@ function RegistrarPedidoContent() {
               <p>• Tus datos se guardan automáticamente cada minuto</p>
               {modoForzadoOffline ? (
                 <>
-                  <p>• <strong>Modo estable:</strong> La interfaz no cambiará aunque se reconecte</p>
-                  <p>• Los pedidos se sincronizarán cuando vayas al menú principal</p>
+                  <p>• <strong>🔒 Modo estable activado:</strong> La interfaz no cambiará automáticamente aunque haya conexión</p>
+                  <p>• <strong>Reconexiones ignoradas:</strong> Los cambios automáticos están completamente bloqueados</p>
+                  <p>• <strong>Sincronización:</strong> Los pedidos se sincronizarán cuando vayas al menú principal manualmente</p>
+                  <p>• <strong>Control total:</strong> Solo tú decides cuándo cambiar al modo online usando el botón de desbloqueo</p>
                 </>
               ) : (
-                <p>• Al reconectarte, todos los pedidos se sincronizarán automáticamente</p>
+                <p>• Al reconectarte, podrás elegir si continuar offline o ir al menú principal</p>
               )}
             </div>
           </div>
@@ -607,7 +638,7 @@ function RegistrarPedidoContent() {
         onCancelar={() => setMostrarConfirmacionSalida(false)}
       />
 
-      {/* ✅ NUEVO MODAL DE RECONEXIÓN */}
+      {/* ✅ MODAL DE RECONEXIÓN ULTRA ESTABLE */}
       <ModalConexionRestablecida
         mostrar={mostrarModalReconexion}
         onIrAMenu={handleIrAMenuDesdeModal}

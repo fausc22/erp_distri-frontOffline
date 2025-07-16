@@ -1,4 +1,4 @@
-// components/OfflineGuard.jsx - Simplificado sin redirecciones automáticas
+// components/OfflineGuard.jsx - ULTRA SIMPLIFICADO: NUNCA redirige automáticamente
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useConnection } from '../utils/ConnectionManager';
@@ -10,20 +10,20 @@ export default function OfflineGuard({ children }) {
   
   const isPWA = getAppMode() === 'pwa';
 
-  // ✅ SOLO COMPONENTE PASIVO - NO REDIRECCIONES AUTOMÁTICAS
+  // ✅ COMPONENTE COMPLETAMENTE PASIVO - NUNCA REDIRIGE
   useEffect(() => {
     if (!isPWA || !eventType) return;
 
     const currentPath = router.pathname;
 
-    // ✅ Solo logging, sin redirecciones
+    // ✅ SOLO LOGGING PASIVO - NUNCA ACCIONES AUTOMÁTICAS
     switch (eventType) {
       case 'connection_lost':
-        console.log(`📴 Conexión perdida detectada en: ${currentPath}`);
+        console.log(`📴 [OfflineGuard] Conexión perdida detectada en: ${currentPath} - SIN ACCIÓN`);
         break;
         
       case 'connection_restored':
-        console.log(`🌐 Conexión restaurada detectada en: ${currentPath}`);
+        console.log(`🌐 [OfflineGuard] Conexión restaurada detectada en: ${currentPath} - SIN ACCIÓN`);
         break;
         
       default:
@@ -31,8 +31,12 @@ export default function OfflineGuard({ children }) {
     }
   }, [eventType, router.pathname, isPWA]);
 
-  // ✅ NO HAY VERIFICACIONES INICIALES NI REDIRECCIONES
+  // ✅ NO HAY VERIFICACIONES INICIALES
+  // ✅ NO HAY REDIRECCIONES AUTOMÁTICAS
+  // ✅ NO HAY LÓGICA DE PROTECCIÓN AUTOMÁTICA
+  
   // El componente simplemente pasa los children sin modificaciones
+  console.log('🛡️ [OfflineGuard] Modo pasivo - sin redirecciones automáticas');
   
   return children;
 }
@@ -45,7 +49,7 @@ export function NavbarGuard({ children }) {
 
 // ✅ COMPONENTE SIMPLIFICADO PARA ENLACES
 export function LinkGuard({ href, children, className, ...props }) {
-  const { isOnline, checkOnDemand } = useConnection();
+  const { checkOnDemand } = useConnection();
   const isPWA = getAppMode() === 'pwa';
   
   const handleClick = async (e) => {
@@ -62,13 +66,17 @@ export function LinkGuard({ href, children, className, ...props }) {
     if (isPWA && requiresOnline) {
       e.preventDefault();
       
-      // Verificar conexión en demanda
+      console.log(`🔍 [LinkGuard] Verificando conexión para: ${href}`);
+      
+      // Verificar conexión bajo demanda
       const hayConexion = await checkOnDemand();
       
       if (hayConexion) {
+        console.log(`🌐 [LinkGuard] Conexión confirmada, navegando a: ${href}`);
         // Hay conexión, permitir navegación
         window.location.href = href;
       } else {
+        console.log(`📴 [LinkGuard] Sin conexión, bloqueando navegación a: ${href}`);
         // Sin conexión, mostrar advertencia
         if (typeof toast !== 'undefined') {
           toast.error('📴 Esta sección requiere conexión a internet', {
@@ -80,7 +88,8 @@ export function LinkGuard({ href, children, className, ...props }) {
       return false;
     }
     
-    // Navegación normal para otras rutas
+    // Navegación normal para rutas siempre disponibles
+    console.log(`✅ [LinkGuard] Navegación libre a: ${href}`);
     if (props.onClick) {
       props.onClick(e);
     }
@@ -98,24 +107,26 @@ export function LinkGuard({ href, children, className, ...props }) {
   );
 }
 
-// ✅ HOC SIMPLIFICADO PARA PROTEGER PÁGINAS
+// ✅ HOC ULTRA SIMPLIFICADO
 export function withOfflineGuard(Component, options = {}) {
   const { allowOffline = false } = options;
 
   return function GuardedComponent(props) {
-    const { isOnline, checkOnDemand } = useConnection();
+    const { checkOnDemand } = useConnection();
     const router = useRouter();
     const isPWA = getAppMode() === 'pwa';
     const [checking, setChecking] = useState(false);
 
-    // ✅ Solo verificar si la ruta específicamente no permite offline
+    // ✅ SOLO verificar si la ruta específicamente NO permite offline
+    // Y SOLO para rutas que estrictamente requieren online
     useEffect(() => {
       if (!isPWA || allowOffline) {
         return;
       }
 
-      // Solo verificar para rutas que estrictamente requieren online
       const currentRoute = router.pathname;
+      
+      // ✅ SOLO rutas que ESTRICTAMENTE requieren online
       const strictOnlineRoutes = [
         '/inventario',
         '/compras',
@@ -125,18 +136,23 @@ export function withOfflineGuard(Component, options = {}) {
       
       const needsStrictOnline = strictOnlineRoutes.some(route => currentRoute.includes(route));
       
-      if (needsStrictOnline && !isOnline) {
+      // ✅ SOLO verificar si estamos en una ruta estricta Y parece que no hay conexión
+      if (needsStrictOnline) {
+        console.log(`🔍 [withOfflineGuard] Ruta estricta detectada: ${currentRoute}`);
         setChecking(true);
         
-        // Verificar conexión una vez más
+        // Verificar conexión bajo demanda una sola vez
         checkOnDemand().then(hayConexion => {
           if (!hayConexion) {
+            console.log(`📴 [withOfflineGuard] Sin conexión en ruta estricta, redirigiendo a inicio`);
             router.push('/inicio');
+          } else {
+            console.log(`🌐 [withOfflineGuard] Conexión confirmada para ruta estricta`);
           }
           setChecking(false);
         });
       }
-    }, [isOnline, router, allowOffline, checkOnDemand]);
+    }, [router.pathname, allowOffline, checkOnDemand]);
 
     if (checking) {
       return (

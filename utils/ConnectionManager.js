@@ -1,4 +1,4 @@
-// utils/ConnectionManager.js - SIN AUTO-REDIRECCIONES, MODO ESTABLE
+// utils/ConnectionManager.js - VERSIÓN FINAL: NUNCA RECARGA AUTOMÁTICAMENTE
 import { toast } from 'react-hot-toast';
 import { getAppMode } from './offlineManager';
 
@@ -19,7 +19,7 @@ class ConnectionManager {
   }
 
   init() {
-    console.log('🔌 ConnectionManager iniciado - MODO ESTABLE (sin auto-redirecciones)');
+    console.log('🔌 ConnectionManager iniciado - MODO ULTRA ESTABLE (sin auto-recargas NUNCA)');
     
     // Listeners nativos del navegador
     window.addEventListener('online', this.handleOnline.bind(this));
@@ -29,19 +29,19 @@ class ConnectionManager {
     document.addEventListener('visibilitychange', this.handleVisibilityChange.bind(this));
     window.addEventListener('focus', this.handleFocus.bind(this));
     
-    // Verificación periódica moderada (solo para PWA)
-    if (this.isPWA) {
-      this.startPeriodicCheck();
-    }
+    // ✅ DESHABILITAMOS VERIFICACIÓN PERIÓDICA AUTOMÁTICA
+    // NO queremos que verifique automáticamente y cambie estados
+    // Solo verificación bajo demanda
+    console.log('⚠️ Verificación periódica DESHABILITADA para máxima estabilidad');
     
     // Estado inicial
     this.isOnline = navigator.onLine;
     console.log(`🌐 Estado inicial de conexión: ${this.isOnline ? 'ONLINE' : 'OFFLINE'}`);
   }
 
-  // ✅ GESTIÓN DE EVENTOS SIN REDIRECCIONES AUTOMÁTICAS
+  // ✅ GESTIÓN DE EVENTOS COMPLETAMENTE SILENCIOSA
   handleOnline() {
-    console.log('🌐 Evento ONLINE detectado');
+    console.log('🌐 Evento ONLINE detectado - NOTIFICACIÓN SILENCIOSA');
     
     if (!this.isOnline) {
       this.isOnline = true;
@@ -51,7 +51,7 @@ class ConnectionManager {
   }
 
   handleOffline() {
-    console.log('📴 Evento OFFLINE detectado');
+    console.log('📴 Evento OFFLINE detectado - NOTIFICACIÓN SILENCIOSA');
     
     if (this.isOnline) {
       this.isOnline = false;
@@ -61,82 +61,32 @@ class ConnectionManager {
 
   handleVisibilityChange() {
     if (document.visibilityState === 'visible' && this.isPWA) {
-      console.log('👁️ PWA reactivada, verificando conectividad...');
-      setTimeout(() => {
-        this.verifyConnection();
-      }, 1000);
+      console.log('👁️ PWA reactivada - SIN verificación automática');
+      // ✅ NO HACER NADA AUTOMÁTICO
+      // La verificación solo se hace bajo demanda
     }
   }
 
   handleFocus() {
     if (this.isPWA) {
-      console.log('🔍 PWA obtuvo focus, verificando estado...');
-      setTimeout(() => {
-        this.verifyConnection();
-      }, 500);
+      console.log('🔍 PWA obtuvo focus - SIN verificación automática');
+      // ✅ NO HACER NADA AUTOMÁTICO
     }
   }
 
-  // ✅ VERIFICACIÓN DE CONEXIÓN SILENCIOSA
-  async verifyConnection() {
-    const wasOnline = this.isOnline;
-    let connectionWorks = false;
-    
-    const endpoints = [
-      `${process.env.NEXT_PUBLIC_API_URL}/health`,
-      'https://8.8.8.8',
-    ];
-    
-    for (let attempt = 0; attempt < 2; attempt++) {
-      for (const endpoint of endpoints) {
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 10000);
-          
-          const response = await fetch(endpoint, {
-            method: 'GET',
-            signal: controller.signal,
-            cache: 'no-cache',
-            mode: endpoint.includes('8.8.8.8') ? 'no-cors' : 'cors'
-          });
-          
-          clearTimeout(timeoutId);
-          
-          if (response.ok || endpoint.includes('8.8.8.8')) {
-            connectionWorks = true;
-            break;
-          }
-          
-        } catch (error) {
-          console.log(`📡 Intento ${attempt + 1} falló para ${endpoint}:`, error.message);
-          continue;
-        }
-      }
-      
-      if (connectionWorks) break;
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    }
-    
-    this.isOnline = connectionWorks;
-    
-    if (!wasOnline && this.isOnline) {
-      this.handleConnectionRestored();
-    } else if (wasOnline && !this.isOnline) {
-      this.handleConnectionLost();
-    }
-  }
-
-  // ✅ MANEJO SILENCIOSO - SOLO NOTIFICACIONES A LISTENERS
+  // ✅ MANEJO COMPLETAMENTE SILENCIOSO - SOLO NOTIFICAR LISTENERS
   handleConnectionLost() {
     if (this.isTransitioning) return;
     
-    console.log('📴 Conexión perdida - Notificando listeners');
+    console.log('📴 Conexión perdida - Notificación silenciosa SOLAMENTE');
     this.isTransitioning = true;
     
-    // ✅ NO MOSTRAR TOAST AUTOMÁTICO - Solo notificar listeners
+    // ✅ NO MOSTRAR TOAST - COMPLETAMENTE SILENCIOSO
+    // Solo notificar a listeners para que actualicen UI
     this.notifyListeners('connection_lost', {
       isOnline: false,
-      message: 'Conexión perdida'
+      message: 'Conexión perdida',
+      silent: true
     });
     
     setTimeout(() => {
@@ -147,13 +97,15 @@ class ConnectionManager {
   handleConnectionRestored() {
     if (this.isTransitioning) return;
     
-    console.log('🌐 Conexión restaurada - Notificando listeners');
+    console.log('🌐 Conexión restaurada - Notificación silenciosa SOLAMENTE');
     this.isTransitioning = true;
     
-    // ✅ NO MOSTRAR TOAST AUTOMÁTICO - Solo notificar listeners
+    // ✅ NO MOSTRAR TOAST - COMPLETAMENTE SILENCIOSO
+    // Solo notificar a listeners para que actualicen UI
     this.notifyListeners('connection_restored', {
       isOnline: true,
-      message: 'Conexión restaurada'
+      message: 'Conexión restaurada',
+      silent: true
     });
     
     setTimeout(() => {
@@ -161,9 +113,9 @@ class ConnectionManager {
     }, 2000);
   }
 
-  // ✅ NUEVA FUNCIÓN: Verificar conexión en demanda para botones
+  // ✅ VERIFICACIÓN BAJO DEMANDA - ÚNICA FORMA DE VERIFICAR CONEXIÓN
   async checkConnectionOnDemand() {
-    console.log('🔍 Verificación de conexión bajo demanda...');
+    console.log('🔍 Verificación de conexión BAJO DEMANDA...');
     
     try {
       const controller = new AbortController();
@@ -178,9 +130,16 @@ class ConnectionManager {
       clearTimeout(timeoutId);
       
       const isOnline = response.ok;
+      
+      // ✅ ACTUALIZAR ESTADO INTERNO SIN NOTIFICACIONES
+      const wasOnline = this.isOnline;
       this.isOnline = isOnline;
       
-      console.log(`✅ Verificación bajo demanda: ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
+      console.log(`✅ Verificación bajo demanda resultado: ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
+      
+      // ✅ NO DISPARAR EVENTOS AUTOMÁTICOS NUNCA
+      // El componente que llama esta función maneja el resultado
+      
       return isOnline;
       
     } catch (error) {
@@ -190,22 +149,7 @@ class ConnectionManager {
     }
   }
 
-  // ✅ VERIFICACIÓN PERIÓDICA SILENCIOSA
-  startPeriodicCheck() {
-    if (this.checkInterval) {
-      clearInterval(this.checkInterval);
-    }
-    
-    this.checkInterval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        this.verifyConnection();
-      }
-    }, 60000); // ✅ Cada 60 segundos para ser menos agresivo
-    
-    console.log('⏰ Verificación periódica silenciosa iniciada (cada 60s)');
-  }
-
-  // ✅ SISTEMA DE LISTENERS
+  // ✅ SISTEMA DE LISTENERS PARA UI
   addListener(callback) {
     this.listeners.add(callback);
     return () => this.listeners.delete(callback);
@@ -233,9 +177,17 @@ class ConnectionManager {
     };
   }
 
-  forceConnectionCheck() {
-    console.log('🔄 Verificación de conexión forzada');
-    return this.verifyConnection();
+  // ✅ VERIFICACIÓN FORZADA MANUAL
+  async forceConnectionCheck() {
+    console.log('🔄 Verificación de conexión FORZADA MANUAL');
+    return await this.checkConnectionOnDemand();
+  }
+
+  // ✅ NO HAY VERIFICACIÓN PERIÓDICA AUTOMÁTICA
+  // Esta función ya no se usa para evitar cambios automáticos
+  startPeriodicCheck() {
+    console.log('⚠️ Verificación periódica NO INICIADA - Modo estable activado');
+    // No hacer nada - mantener estabilidad total
   }
 
   destroy() {
@@ -284,8 +236,9 @@ class ConnectionManager {
       isPWA: this.isPWA,
       reconnectionAttempts: this.reconnectionAttempts,
       listenersCount: this.listeners.size,
-      hasPeriodicCheck: !!this.checkInterval,
-      currentPath: typeof window !== 'undefined' ? window.location.pathname : 'unknown'
+      hasPeriodicCheck: false, // Siempre false en modo estable
+      currentPath: typeof window !== 'undefined' ? window.location.pathname : 'unknown',
+      mode: 'ULTRA_STABLE' // Nuevo modo
     };
   }
 }
@@ -293,7 +246,7 @@ class ConnectionManager {
 // ✅ EXPORTAR INSTANCIA SINGLETON
 export const connectionManager = new ConnectionManager();
 
-// ✅ HOOK SIMPLIFICADO PARA ESTADO DE CONEXIÓN
+// ✅ HOOK ULTRA SIMPLIFICADO - SOLO ESTADO, SIN CAMBIOS AUTOMÁTICOS
 import { useState, useEffect } from 'react';
 
 export function useConnection() {
@@ -303,6 +256,8 @@ export function useConnection() {
 
   useEffect(() => {
     const unsubscribe = connectionManager.addListener((eventType, data) => {
+      console.log(`🔔 Listener recibió evento: ${eventType}, silent: ${data.silent}`);
+      
       setConnectionState({
         isOnline: data.isOnline,
         isTransitioning: data.isTransitioning || false,
