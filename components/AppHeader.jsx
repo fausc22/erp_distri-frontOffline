@@ -10,173 +10,6 @@ import { useConnection } from '../utils/ConnectionManager';
 import { LinkGuard } from './OfflineGuard';
 
 function AppHeader() {
-  const [showMenu, setShowMenu] = useState(false);
-  const [role, setRole] = useState(null);
-  const [empleado, setEmpleado] = useState(null);
-  const [openSubMenu, setOpenSubMenu] = useState(null);
-  const [isPWA, setIsPWA] = useState(false);
-  const router = useRouter();
-
-  // ✅ CONNECTION MANAGER (solo para indicadores visuales)
-  const { isOnline } = useConnection();
-
-  // ✅ NAVEGACIÓN OFFLINE INTELIGENTE
-  const handleOfflineNavigation = async (href) => {
-  const offlineRoutes = [
-    '/ventas/RegistrarPedido',
-    '/inicio',
-    '/login',
-    '/'
-  ];
-  
-  if (offlineRoutes.includes(href)) {
-    console.log(`🔄 Navegación offline robusta a: ${href}`);
-    
-    // ✅ CERRAR MENÚS INMEDIATAMENTE
-    setShowMenu(false);
-    setOpenSubMenu(null);
-    
-    // ✅ NAVEGACIÓN FORZADA SIN DEPENDER DE ROUTER
-    try {
-      // Método 1: Router con timeout muy corto
-      const routerPromise = router.push(href);
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Router timeout')), 500)
-      );
-      
-      await Promise.race([routerPromise, timeoutPromise]);
-      console.log('✅ Navegación con router exitosa');
-      
-    } catch (error) {
-      console.log('⚠️ Router falló, forzando navegación directa...');
-      
-      // Método 2: Navegación directa forzada
-      setTimeout(() => {
-        try {
-          window.location.assign(href);
-        } catch (assignError) {
-          // Método 3: Última opción
-          window.location.href = href;
-        }
-      }, 50);
-    }
-  } else {
-    toast.warning('Esta sección requiere conexión a internet', {
-      duration: 3000,
-      icon: '📴'
-    });
-  }
-  };
-
-// ✅ COMPONENTE LINK MEJORADO - Evitar doble navegación
-  const MenuLink = ({ href, className, children }) => {
-    const handleClick = (e) => {
-      e.preventDefault();
-      e.stopPropagation(); // ✅ Evitar bubbling
-
-      if (isPWA && !isOnline) {
-        // Offline: navegación robusta
-        handleOfflineNavigation(href);
-      } else {
-        // Online: navegación normal
-        setShowMenu(false);
-        setOpenSubMenu(null);
-        
-        setTimeout(() => {
-          router.push(href).catch(() => {
-            window.location.href = href;
-          });
-        }, 50);
-      }
-    };
-
-    return (
-      <a 
-        href="#" 
-        className={className} 
-        onClick={handleClick}
-        onTouchStart={(e) => e.preventDefault()} // ✅ Prevenir touch iOS
-      >
-        {children}
-      </a>
-    );
-  };
-
-  useEffect(() => {
-    // Obtener rol y datos del empleado
-    const roleFromStorage = localStorage.getItem("role");
-    const empleadoFromStorage = localStorage.getItem("empleado");
-    
-    setRole(roleFromStorage);
-    setIsPWA(getAppMode() === 'pwa');
-    
-    if (empleadoFromStorage) {
-      try {
-        const empleadoData = JSON.parse(empleadoFromStorage);
-        setEmpleado(empleadoData);
-      } catch (error) {
-        console.error('Error parsing empleado data:', error);
-        setEmpleado(null);
-      }
-    }
-  }, []);
-
-  useEffect(() => {
-    const handleRouteChange = () => {
-      setShowMenu(false);
-      setOpenSubMenu(null);
-    };
-
-    router.events.on('routeChangeStart', handleRouteChange);
-
-    return () => {
-      router.events.off('routeChangeStart', handleRouteChange);
-    };
-  }, [router]);
-
-  const handleLogout = () => {
-    localStorage.removeItem("role");
-    localStorage.removeItem("token");
-    localStorage.removeItem("empleado");
-    
-    setRole(null);
-    setEmpleado(null);
-    
-    router.push("/");
-  };
-
-  const toggleMenu = () => {
-    setShowMenu(!showMenu);
-    setOpenSubMenu(null);
-  };
-
-  const toggleSubMenu = (menuName) => {
-    setOpenSubMenu(openSubMenu === menuName ? null : menuName);
-  };
-
-  const handleMenuItemClick = () => {
-    setShowMenu(false);
-    setOpenSubMenu(null);
-  };
-
-  const getUserName = () => {
-    if (empleado?.nombre) {
-      return `${empleado.nombre} ${empleado.apellido || ''}`.trim();
-    }
-    return 'Usuario';
-  };
-
-  // ✅ VARIANTES DE ANIMACIÓN
-  const subMenuVariants = {
-    open: { opacity: 1, y: 0, display: 'block' },
-    closed: { opacity: 0, y: -10, display: 'none' },
-  };
-
-  const logoVariants = {
-    hover: { scale: 1.1 },
-    tap: { scale: 0.9 },
-  };
-
   const menuItemVariants = {
     hover: { scale: 1.05, transition: { duration: 0.2 } },
     tap: { scale: 0.95 },
@@ -254,7 +87,7 @@ function AppHeader() {
                 <button 
                   onClick={() => toggleSubMenu('ventas')} 
                   className={getMenuItemStyle(false)}
-                  disabled={isPWA && !isOnline ? false : false} // Siempre habilitado
+                  disabled={false} // Siempre habilitado
                 >
                   VENTAS
                 </button>
@@ -266,18 +99,34 @@ function AppHeader() {
                   transition={{ duration: 0.2, ease: 'easeOut' }}
                   style={{ minWidth: '200px' }}
                 >
-                  <MenuLink href="/ventas/RegistrarPedido" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">
+                  <MenuLink 
+                    href="/ventas/RegistrarPedido" 
+                    className="block py-2 px-4 text-sm whitespace-nowrap"
+                    requiresOnline={false}
+                  >
                     📱 Registrar Pedido (Universal)
                   </MenuLink>
-                  <MenuLink href="/ventas/HistorialPedidos" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap border-b border-black-200">
+                  <MenuLink 
+                    href="/ventas/HistorialPedidos" 
+                    className="block py-2 px-4 text-sm whitespace-nowrap border-b border-black-200"
+                    requiresOnline={true}
+                  >
                     Modificar Nota de Pedido
                   </MenuLink>
                   {(role === 'GERENTE') && (
                     <>
-                      <MenuLink href="/ventas/ListaPrecios" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">
+                      <MenuLink 
+                        href="/ventas/ListaPrecios" 
+                        className="block py-2 px-4 text-sm whitespace-nowrap"
+                        requiresOnline={true}
+                      >
                         Generar Lista de Precios
                       </MenuLink>
-                      <MenuLink href="/ventas/Facturacion" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap mt-1">
+                      <MenuLink 
+                        href="/ventas/Facturacion" 
+                        className="block py-2 px-4 text-sm whitespace-nowrap mt-1"
+                        requiresOnline={true}
+                      >
                         Facturación
                       </MenuLink>
                     </>
@@ -298,7 +147,7 @@ function AppHeader() {
                   INVENTARIO
                   {isPWA && !isOnline && <span className="ml-1 text-xs">🔒</span>}
                 </button>
-                {isOnline && (
+                {(isOnline || !isPWA) && (
                   <motion.div
                     className="absolute top-full left-0 bg-white text-black shadow-md rounded-md p-2 mt-1 origin-top transition duration-200 ease-in-out"
                     variants={subMenuVariants}
@@ -308,10 +157,28 @@ function AppHeader() {
                     style={{ minWidth: '200px' }}
                   >
                     {(role === 'GERENTE') && ( 
-                      <MenuLink href="/inventario/Productos" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">Productos</MenuLink>
+                      <MenuLink 
+                        href="/inventario/Productos" 
+                        className="block py-2 px-4 text-sm whitespace-nowrap"
+                        requiresOnline={true}
+                      >
+                        Productos
+                      </MenuLink>
                     )}
-                    <MenuLink href="/inventario/consultaStock" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap border-b border-gray-200">Consulta de STOCK</MenuLink>
-                    <MenuLink href="/inventario/Remitos" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">Remitos</MenuLink>
+                    <MenuLink 
+                      href="/inventario/consultaStock" 
+                      className="block py-2 px-4 text-sm whitespace-nowrap border-b border-gray-200"
+                      requiresOnline={true}
+                    >
+                      Consulta de STOCK
+                    </MenuLink>
+                    <MenuLink 
+                      href="/inventario/Remitos" 
+                      className="block py-2 px-4 text-sm whitespace-nowrap"
+                      requiresOnline={true}
+                    >
+                      Remitos
+                    </MenuLink>
                   </motion.div>
                 )}
               </motion.div>
@@ -328,7 +195,7 @@ function AppHeader() {
                 COMPRAS
                 {isPWA && !isOnline && <span className="ml-1 text-xs">🔒</span>}
               </button>
-              {isOnline && (
+              {(isOnline || !isPWA) && (
                 <motion.div
                   className="absolute top-full left-0 bg-white text-black shadow-md rounded-md p-2 mt-1 origin-top transition duration-200 ease-in-out"
                   variants={subMenuVariants}
@@ -338,17 +205,29 @@ function AppHeader() {
                   style={{ minWidth: '200px' }}
                 >
                   {role === 'GERENTE' && (
-                    <MenuLink href="/compras/RegistrarCompra" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">
+                    <MenuLink 
+                      href="/compras/RegistrarCompra" 
+                      className="block py-2 px-4 text-sm whitespace-nowrap"
+                      requiresOnline={true}
+                    >
                       Registrar Compra
                     </MenuLink>
                   )}
                   
-                  <MenuLink href="/compras/RegistrarGasto" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap border-b border-gray-200">
+                  <MenuLink 
+                    href="/compras/RegistrarGasto" 
+                    className="block py-2 px-4 text-sm whitespace-nowrap border-b border-gray-200"
+                    requiresOnline={true}
+                  >
                     Registrar Gasto
                   </MenuLink>
                   
                   {role === 'GERENTE' && (
-                    <MenuLink href="/compras/HistorialCompras" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">
+                    <MenuLink 
+                      href="/compras/HistorialCompras" 
+                      className="block py-2 px-4 text-sm whitespace-nowrap"
+                      requiresOnline={true}
+                    >
                       Historial de Compras
                     </MenuLink>
                   )}
@@ -368,7 +247,7 @@ function AppHeader() {
                   FINANZAS
                   {isPWA && !isOnline && <span className="ml-1 text-xs">🔒</span>}
                 </button>
-                {isOnline && (
+                {(isOnline || !isPWA) && (
                   <motion.div
                     className="absolute top-full left-0 bg-white text-black shadow-md rounded-md p-2 mt-1 origin-top transition duration-200 ease-in-out"
                     variants={subMenuVariants}
@@ -377,10 +256,34 @@ function AppHeader() {
                     transition={{ duration: 0.2, ease: 'easeOut' }}
                     style={{ minWidth: '200px' }}
                   >
-                    <MenuLink href="/finanzas/fondos" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">Fondos</MenuLink>
-                    <MenuLink href="/finanzas/ingresos" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">Historial de Ingresos</MenuLink>
-                    <MenuLink href="/finanzas/egresos" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap border-b border-gray-200">Historial de Egresos</MenuLink>
-                    <MenuLink href="/finanzas/reportes" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">Reportes Financieros</MenuLink>
+                    <MenuLink 
+                      href="/finanzas/fondos" 
+                      className="block py-2 px-4 text-sm whitespace-nowrap"
+                      requiresOnline={true}
+                    >
+                      Fondos
+                    </MenuLink>
+                    <MenuLink 
+                      href="/finanzas/ingresos" 
+                      className="block py-2 px-4 text-sm whitespace-nowrap"
+                      requiresOnline={true}
+                    >
+                      Historial de Ingresos
+                    </MenuLink>
+                    <MenuLink 
+                      href="/finanzas/egresos" 
+                      className="block py-2 px-4 text-sm whitespace-nowrap border-b border-gray-200"
+                      requiresOnline={true}
+                    >
+                      Historial de Egresos
+                    </MenuLink>
+                    <MenuLink 
+                      href="/finanzas/reportes" 
+                      className="block py-2 px-4 text-sm whitespace-nowrap"
+                      requiresOnline={true}
+                    >
+                      Reportes Financieros
+                    </MenuLink>
                   </motion.div>
                 )}
               </motion.div>
@@ -397,7 +300,7 @@ function AppHeader() {
                 EDICION
                 {isPWA && !isOnline && <span className="ml-1 text-xs">🔒</span>}
               </button>
-              {isOnline && (
+              {(isOnline || !isPWA) && (
                 <motion.div
                   className="absolute top-full left-0 bg-white text-black shadow-md rounded-md p-2 mt-1 origin-top transition duration-200 ease-in-out"
                   variants={subMenuVariants}
@@ -406,12 +309,30 @@ function AppHeader() {
                   transition={{ duration: 0.2, ease: 'easeOut' }}
                   style={{ minWidth: '200px' }}
                 >
-                  <MenuLink href="/edicion/Clientes" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">Clientes</MenuLink>
+                  <MenuLink 
+                    href="/edicion/Clientes" 
+                    className="block py-2 px-4 text-sm whitespace-nowrap"
+                    requiresOnline={true}
+                  >
+                    Clientes
+                  </MenuLink>
                   
                   {role === 'GERENTE' && (
                     <>
-                      <MenuLink href="/edicion/Proveedores" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">Proveedores</MenuLink>
-                      <MenuLink href="/edicion/Empleados" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">Empleados</MenuLink>
+                      <MenuLink 
+                        href="/edicion/Proveedores" 
+                        className="block py-2 px-4 text-sm whitespace-nowrap"
+                        requiresOnline={true}
+                      >
+                        Proveedores
+                      </MenuLink>
+                      <MenuLink 
+                        href="/edicion/Empleados" 
+                        className="block py-2 px-4 text-sm whitespace-nowrap"
+                        requiresOnline={true}
+                      >
+                        Empleados
+                      </MenuLink>
                     </>
                   )}
                 </motion.div>
@@ -482,14 +403,38 @@ function AppHeader() {
                   transition={{ duration: 0.3, ease: 'easeInOut' }}
                   className="overflow-hidden"
                 >
-                  <MenuLink href="/ventas/RegistrarPedido" className="block py-2 px-4 hover:bg-blue-600 text-white">Registrar Pedido</MenuLink>
-                  {isOnline && (
+                  <MenuLink 
+                    href="/ventas/RegistrarPedido" 
+                    className="block py-2 px-4 hover:bg-blue-600 text-white"
+                    requiresOnline={false}
+                  >
+                    Registrar Pedido
+                  </MenuLink>
+                  {(isOnline || !isPWA) && (
                     <>
-                      <MenuLink href="/ventas/HistorialPedidos" className="block py-2 px-4 hover:bg-blue-600 text-white">Modificar Nota de Pedido</MenuLink>
+                      <MenuLink 
+                        href="/ventas/HistorialPedidos" 
+                        className="block py-2 px-4 hover:bg-blue-600 text-white"
+                        requiresOnline={true}
+                      >
+                        Modificar Nota de Pedido
+                      </MenuLink>
                       {(role === 'GERENTE') && (
                         <>
-                          <MenuLink href="/ventas/ListaPrecios" className="block py-2 px-4 hover:bg-blue-600 text-white">Generar Lista de Precios</MenuLink>
-                          <MenuLink href="/ventas/Facturacion" className="block py-2 px-4 hover:bg-blue-600 text-white">Facturación</MenuLink>
+                          <MenuLink 
+                            href="/ventas/ListaPrecios" 
+                            className="block py-2 px-4 hover:bg-blue-600 text-white"
+                            requiresOnline={true}
+                          >
+                            Generar Lista de Precios
+                          </MenuLink>
+                          <MenuLink 
+                            href="/ventas/Facturacion" 
+                            className="block py-2 px-4 hover:bg-blue-600 text-white"
+                            requiresOnline={true}
+                          >
+                            Facturación
+                          </MenuLink>
                         </>
                       )}
                     </>
@@ -499,7 +444,7 @@ function AppHeader() {
             )}
 
             {/* RESTO DE MENÚS MÓVILES - Solo cuando online */}
-            {isOnline && (
+            {(isOnline || !isPWA) && (
               <>
                 {/* INVENTARIO MÓVIL */}
                 {(role === 'GERENTE' || role === 'VENDEDOR') && (
@@ -518,10 +463,28 @@ function AppHeader() {
                       className="overflow-hidden"
                     >
                       {role === 'GERENTE' && (
-                        <MenuLink href="/inventario/Productos" className="block py-2 px-4 hover:bg-blue-600 text-white">Productos</MenuLink>
+                        <MenuLink 
+                          href="/inventario/Productos" 
+                          className="block py-2 px-4 hover:bg-blue-600 text-white"
+                          requiresOnline={true}
+                        >
+                          Productos
+                        </MenuLink>
                       )}
-                      <MenuLink href="/inventario/consultaStock" className="block py-2 px-4 hover:bg-blue-600 text-white">Consulta de STOCK</MenuLink>
-                      <MenuLink href="/inventario/Remitos" className="block py-2 px-4 hover:bg-blue-600 text-white">Remitos</MenuLink>
+                      <MenuLink 
+                        href="/inventario/consultaStock" 
+                        className="block py-2 px-4 hover:bg-blue-600 text-white"
+                        requiresOnline={true}
+                      >
+                        Consulta de STOCK
+                      </MenuLink>
+                      <MenuLink 
+                        href="/inventario/Remitos" 
+                        className="block py-2 px-4 hover:bg-blue-600 text-white"
+                        requiresOnline={true}
+                      >
+                        Remitos
+                      </MenuLink>
                     </motion.div>
                   </div>
                 )}
@@ -542,13 +505,31 @@ function AppHeader() {
                     className="overflow-hidden"
                   >
                     {role === 'GERENTE' && (
-                      <MenuLink href="/compras/RegistrarCompra" className="block py-2 px-4 hover:bg-blue-600 text-white">Registrar Compra</MenuLink>
+                      <MenuLink 
+                        href="/compras/RegistrarCompra" 
+                        className="block py-2 px-4 hover:bg-blue-600 text-white"
+                        requiresOnline={true}
+                      >
+                        Registrar Compra
+                      </MenuLink>
                     )}
                     
-                    <MenuLink href="/compras/RegistrarGasto" className="block py-2 px-4 hover:bg-blue-600 text-white">Registrar Gasto</MenuLink>
+                    <MenuLink 
+                      href="/compras/RegistrarGasto" 
+                      className="block py-2 px-4 hover:bg-blue-600 text-white"
+                      requiresOnline={true}
+                    >
+                      Registrar Gasto
+                    </MenuLink>
                     
                     {role === 'GERENTE' && (
-                      <MenuLink href="/compras/HistorialCompras" className="block py-2 px-4 hover:bg-blue-600 text-white">Historial de Compras</MenuLink>
+                      <MenuLink 
+                        href="/compras/HistorialCompras" 
+                        className="block py-2 px-4 hover:bg-blue-600 text-white"
+                        requiresOnline={true}
+                      >
+                        Historial de Compras
+                      </MenuLink>
                     )}
                   </motion.div>
                 </div>
@@ -569,10 +550,34 @@ function AppHeader() {
                       transition={{ duration: 0.3, ease: 'easeInOut' }}
                       className="overflow-hidden"
                     >
-                      <MenuLink href="/finanzas/fondos" className="block py-2 px-4 hover:bg-blue-600 text-white">Fondos</MenuLink>
-                      <MenuLink href="/finanzas/ingresos" className="block py-2 px-4 hover:bg-blue-600 text-white">Historial de Ingresos</MenuLink>
-                      <MenuLink href="/finanzas/egresos" className="block py-2 px-4 hover:bg-blue-600 text-white">Historial de Egresos</MenuLink>
-                      <MenuLink href="/finanzas/reportes" className="block py-2 px-4 hover:bg-blue-600 text-white">Reportes Financieros</MenuLink>
+                      <MenuLink 
+                        href="/finanzas/fondos" 
+                        className="block py-2 px-4 hover:bg-blue-600 text-white"
+                        requiresOnline={true}
+                      >
+                        Fondos
+                      </MenuLink>
+                      <MenuLink 
+                        href="/finanzas/ingresos" 
+                        className="block py-2 px-4 hover:bg-blue-600 text-white"
+                        requiresOnline={true}
+                      >
+                        Historial de Ingresos
+                      </MenuLink>
+                      <MenuLink 
+                        href="/finanzas/egresos" 
+                        className="block py-2 px-4 hover:bg-blue-600 text-white"
+                        requiresOnline={true}
+                      >
+                        Historial de Egresos
+                      </MenuLink>
+                      <MenuLink 
+                        href="/finanzas/reportes" 
+                        className="block py-2 px-4 hover:bg-blue-600 text-white"
+                        requiresOnline={true}
+                      >
+                        Reportes Financieros
+                      </MenuLink>
                     </motion.div>
                   </div>
                 )}
@@ -592,12 +597,30 @@ function AppHeader() {
                     transition={{ duration: 0.3, ease: 'easeInOut' }}
                     className="overflow-hidden"
                   >
-                    <MenuLink href="/edicion/Clientes" className="block py-2 px-4 hover:bg-blue-600 text-white">Clientes</MenuLink>
+                    <MenuLink 
+                      href="/edicion/Clientes" 
+                      className="block py-2 px-4 hover:bg-blue-600 text-white"
+                      requiresOnline={true}
+                    >
+                      Clientes
+                    </MenuLink>
                     
                     {role === 'GERENTE' && (
                       <>
-                        <MenuLink href="/edicion/Proveedores" className="block py-2 px-4 hover:bg-blue-600 text-white">Proveedores</MenuLink>
-                        <MenuLink href="/edicion/Empleados" className="block py-2 px-4 hover:bg-blue-600 text-white">Empleados</MenuLink>
+                        <MenuLink 
+                          href="/edicion/Proveedores" 
+                          className="block py-2 px-4 hover:bg-blue-600 text-white"
+                          requiresOnline={true}
+                        >
+                          Proveedores
+                        </MenuLink>
+                        <MenuLink 
+                          href="/edicion/Empleados" 
+                          className="block py-2 px-4 hover:bg-blue-600 text-white"
+                          requiresOnline={true}
+                        >
+                          Empleados
+                        </MenuLink>
                       </>
                     )}
                   </motion.div>

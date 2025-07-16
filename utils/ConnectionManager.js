@@ -1,4 +1,4 @@
-// utils/ConnectionManager.js - SIN REDIRECCIONES AUTOMÁTICAS
+// utils/ConnectionManager.js - SIN AUTO-REDIRECCIONES, MODO ESTABLE
 import { toast } from 'react-hot-toast';
 import { getAppMode } from './offlineManager';
 
@@ -19,7 +19,7 @@ class ConnectionManager {
   }
 
   init() {
-    console.log('🔌 ConnectionManager iniciado - SIN redirecciones automáticas');
+    console.log('🔌 ConnectionManager iniciado - MODO ESTABLE (sin auto-redirecciones)');
     
     // Listeners nativos del navegador
     window.addEventListener('online', this.handleOnline.bind(this));
@@ -39,7 +39,7 @@ class ConnectionManager {
     console.log(`🌐 Estado inicial de conexión: ${this.isOnline ? 'ONLINE' : 'OFFLINE'}`);
   }
 
-  // ✅ GESTIÓN DE EVENTOS SIN REDIRECCIONES
+  // ✅ GESTIÓN DE EVENTOS SIN REDIRECCIONES AUTOMÁTICAS
   handleOnline() {
     console.log('🌐 Evento ONLINE detectado');
     
@@ -77,7 +77,7 @@ class ConnectionManager {
     }
   }
 
-  // ✅ VERIFICACIÓN DE CONEXIÓN SIN REDIRECCIONES
+  // ✅ VERIFICACIÓN DE CONEXIÓN SILENCIOSA
   async verifyConnection() {
     const wasOnline = this.isOnline;
     let connectionWorks = false;
@@ -126,22 +126,17 @@ class ConnectionManager {
     }
   }
 
-  // ✅ MANEJO SIN REDIRECCIONES - SOLO NOTIFICACIONES
+  // ✅ MANEJO SILENCIOSO - SOLO NOTIFICACIONES A LISTENERS
   handleConnectionLost() {
     if (this.isTransitioning) return;
     
-    console.log('📴 Conexión perdida - MODO OFFLINE activado');
+    console.log('📴 Conexión perdida - Notificando listeners');
     this.isTransitioning = true;
     
-    // Solo toast informativo - SIN redirección
-    toast.error('📴 Sin conexión - Modo offline activado', {
-      duration: 3000,
-      icon: '📱'
-    });
-    
+    // ✅ NO MOSTRAR TOAST AUTOMÁTICO - Solo notificar listeners
     this.notifyListeners('connection_lost', {
       isOnline: false,
-      message: 'Modo offline activado'
+      message: 'Conexión perdida'
     });
     
     setTimeout(() => {
@@ -152,17 +147,13 @@ class ConnectionManager {
   handleConnectionRestored() {
     if (this.isTransitioning) return;
     
-    console.log('🌐 Conexión restaurada - MODO ONLINE activado');
+    console.log('🌐 Conexión restaurada - Notificando listeners');
     this.isTransitioning = true;
     
-    toast.success('🌐 Conexión restaurada - Modo online activado', {
-      duration: 3000,
-      icon: '🌐'
-    });
-    
+    // ✅ NO MOSTRAR TOAST AUTOMÁTICO - Solo notificar listeners
     this.notifyListeners('connection_restored', {
       isOnline: true,
-      message: 'Modo online activado'
+      message: 'Conexión restaurada'
     });
     
     setTimeout(() => {
@@ -170,7 +161,36 @@ class ConnectionManager {
     }, 2000);
   }
 
-  // ✅ VERIFICACIÓN PERIÓDICA MODERADA
+  // ✅ NUEVA FUNCIÓN: Verificar conexión en demanda para botones
+  async checkConnectionOnDemand() {
+    console.log('🔍 Verificación de conexión bajo demanda...');
+    
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/health`, {
+        method: 'GET',
+        signal: controller.signal,
+        cache: 'no-cache'
+      });
+      
+      clearTimeout(timeoutId);
+      
+      const isOnline = response.ok;
+      this.isOnline = isOnline;
+      
+      console.log(`✅ Verificación bajo demanda: ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
+      return isOnline;
+      
+    } catch (error) {
+      console.log('❌ Verificación bajo demanda falló:', error.message);
+      this.isOnline = false;
+      return false;
+    }
+  }
+
+  // ✅ VERIFICACIÓN PERIÓDICA SILENCIOSA
   startPeriodicCheck() {
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
@@ -180,9 +200,9 @@ class ConnectionManager {
       if (document.visibilityState === 'visible') {
         this.verifyConnection();
       }
-    }, 45000);
+    }, 60000); // ✅ Cada 60 segundos para ser menos agresivo
     
-    console.log('⏰ Verificación periódica iniciada (cada 45s)');
+    console.log('⏰ Verificación periódica silenciosa iniciada (cada 60s)');
   }
 
   // ✅ SISTEMA DE LISTENERS
@@ -273,7 +293,7 @@ class ConnectionManager {
 // ✅ EXPORTAR INSTANCIA SINGLETON
 export const connectionManager = new ConnectionManager();
 
-// ✅ HOOK SIMPLIFICADO SIN REDIRECCIONES
+// ✅ HOOK SIMPLIFICADO PARA ESTADO DE CONEXIÓN
 import { useState, useEffect } from 'react';
 
 export function useConnection() {
@@ -299,6 +319,7 @@ export function useConnection() {
   return {
     ...connectionState,
     forceCheck: connectionManager.forceConnectionCheck.bind(connectionManager),
-    waitForConnection: connectionManager.waitForConnection.bind(connectionManager)
+    waitForConnection: connectionManager.waitForConnection.bind(connectionManager),
+    checkOnDemand: connectionManager.checkConnectionOnDemand.bind(connectionManager)
   };
 }

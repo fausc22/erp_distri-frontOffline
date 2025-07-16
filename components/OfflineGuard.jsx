@@ -1,4 +1,4 @@
-// components/OfflineGuard.jsx - Simplificado para redirección directa a /offline
+// components/OfflineGuard.jsx - Simplificado sin redirecciones automáticas
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useConnection } from '../utils/ConnectionManager';
@@ -7,89 +7,80 @@ import { getAppMode } from '../utils/offlineManager';
 export default function OfflineGuard({ children }) {
   const router = useRouter();
   const { isOnline, eventType } = useConnection();
-  const [isRedirecting, setIsRedirecting] = useState(false);
   
   const isPWA = getAppMode() === 'pwa';
 
-  // ✅ MANEJO DE EVENTOS DE CONECTIVIDAD SIMPLIFICADO
+  // ✅ SOLO COMPONENTE PASIVO - NO REDIRECCIONES AUTOMÁTICAS
   useEffect(() => {
-    if (!isPWA || !eventType || isRedirecting) return;
+    if (!isPWA || !eventType) return;
 
     const currentPath = router.pathname;
 
+    // ✅ Solo logging, sin redirecciones
     switch (eventType) {
-      case 'connection_lost_redirect':
-        // Solo redirigir si NO está en /offline
-        if (currentPath !== '/offline') {
-          handleOfflineRedirect();
-        }
+      case 'connection_lost':
+        console.log(`📴 Conexión perdida detectada en: ${currentPath}`);
         break;
         
-      case 'connection_restored_normal':
-        // Notificación normal de reconexión (no hacer nada especial)
-        console.log('🌐 Conexión restaurada en página online');
-        break;
-        
-      case 'connection_restored_show_button':
-        // Evento manejado por la página /offline
-        console.log('🔄 Evento para mostrar botón de reconexión');
+      case 'connection_restored':
+        console.log(`🌐 Conexión restaurada detectada en: ${currentPath}`);
         break;
         
       default:
         break;
     }
-  }, [eventType, router.pathname, isPWA, isRedirecting]);
+  }, [eventType, router.pathname, isPWA]);
 
-  // ✅ REDIRECCIÓN SIMPLIFICADA A /offline
-  const handleOfflineRedirect = () => {
-    if (isRedirecting) return;
-    
-    console.log('📴 Redirigiendo a página offline dedicada');
-    setIsRedirecting(true);
-
-    // ✅ REDIRECCIÓN INMEDIATA Y ROBUSTA
-    setTimeout(() => {
-      window.location.href = '/offline';
-    }, 500);
-  };
-
-  // ✅ VERIFICACIÓN INICIAL SIMPLIFICADA
-  useEffect(() => {
-    if (!isPWA) return;
-
-    const currentPath = router.pathname;
-    
-    // Si estamos offline, NO está en /offline ni en /login, redirigir
-    if (!isOnline && currentPath !== '/offline' && currentPath !== '/login' && !isRedirecting) {
-      console.log(`🚫 Offline detectado en ${currentPath}, redirigiendo a /offline`);
-      handleOfflineRedirect();
-    }
-  }, [router.pathname, isOnline, isPWA, isRedirecting]);
-
+  // ✅ NO HAY VERIFICACIONES INICIALES NI REDIRECCIONES
+  // El componente simplemente pasa los children sin modificaciones
   
   return children;
 }
 
-// ✅ COMPONENTE SIMPLIFICADO PARA NAVBAR (ya no necesita lógica compleja)
+// ✅ COMPONENTE SIMPLIFICADO PARA NAVBAR
 export function NavbarGuard({ children }) {
-  // El navbar siempre se muestra, ya que /offline no usa layout
+  // El navbar siempre se muestra sin restricciones
   return children;
 }
 
 // ✅ COMPONENTE SIMPLIFICADO PARA ENLACES
 export function LinkGuard({ href, children, className, ...props }) {
-  const { isOnline } = useConnection();
+  const { isOnline, checkOnDemand } = useConnection();
   const isPWA = getAppMode() === 'pwa';
   
-  const handleClick = (e) => {
-    // Si estamos offline en PWA, redirigir a /offline en lugar de bloquear
-    if (isPWA && !isOnline && href !== '/offline') {
+  const handleClick = async (e) => {
+    // ✅ Solo verificar para rutas que requieren conexión estricta
+    const routesRequireOnline = [
+      '/inventario',
+      '/compras', 
+      '/finanzas',
+      '/edicion'
+    ];
+    
+    const requiresOnline = routesRequireOnline.some(route => href.includes(route));
+    
+    if (isPWA && requiresOnline) {
       e.preventDefault();
-      window.location.href = '/offline';
+      
+      // Verificar conexión en demanda
+      const hayConexion = await checkOnDemand();
+      
+      if (hayConexion) {
+        // Hay conexión, permitir navegación
+        window.location.href = href;
+      } else {
+        // Sin conexión, mostrar advertencia
+        if (typeof toast !== 'undefined') {
+          toast.error('📴 Esta sección requiere conexión a internet', {
+            duration: 3000,
+            icon: '📴'
+          });
+        }
+      }
       return false;
     }
     
-    // Navegación normal
+    // Navegación normal para otras rutas
     if (props.onClick) {
       props.onClick(e);
     }
@@ -112,24 +103,40 @@ export function withOfflineGuard(Component, options = {}) {
   const { allowOffline = false } = options;
 
   return function GuardedComponent(props) {
-    const { isOnline } = useConnection();
+    const { isOnline, checkOnDemand } = useConnection();
     const router = useRouter();
     const isPWA = getAppMode() === 'pwa';
-    const [checking, setChecking] = useState(true);
+    const [checking, setChecking] = useState(false);
 
+    // ✅ Solo verificar si la ruta específicamente no permite offline
     useEffect(() => {
-      if (!isPWA) {
-        setChecking(false);
+      if (!isPWA || allowOffline) {
         return;
       }
 
-      if (!allowOffline && !isOnline) {
-        router.push('/offline');
-        return;
+      // Solo verificar para rutas que estrictamente requieren online
+      const currentRoute = router.pathname;
+      const strictOnlineRoutes = [
+        '/inventario',
+        '/compras',
+        '/finanzas', 
+        '/edicion'
+      ];
+      
+      const needsStrictOnline = strictOnlineRoutes.some(route => currentRoute.includes(route));
+      
+      if (needsStrictOnline && !isOnline) {
+        setChecking(true);
+        
+        // Verificar conexión una vez más
+        checkOnDemand().then(hayConexion => {
+          if (!hayConexion) {
+            router.push('/inicio');
+          }
+          setChecking(false);
+        });
       }
-
-      setChecking(false);
-    }, [isOnline, router]);
+    }, [isOnline, router, allowOffline, checkOnDemand]);
 
     if (checking) {
       return (
