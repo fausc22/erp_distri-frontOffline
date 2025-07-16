@@ -164,6 +164,7 @@ export default function Inicio() {
             </p>
             
             <div className="space-y-2">
+              <LinkGuard href="/offline" className="block text-blue-600 hover:text-blue-800 text-sm">• OFFLINE</LinkGuard>
               <LinkGuard href="/ventas/RegistrarPedido" className="block text-blue-600 hover:text-blue-800 text-sm">• Registrar Nota de Pedido</LinkGuard>
               <LinkGuard href="/ventas/HistorialPedidos" className="block text-blue-600 hover:text-blue-800 text-sm">• Historial de Pedidos</LinkGuard>
               {empleado?.rol === 'GERENTE' && (
