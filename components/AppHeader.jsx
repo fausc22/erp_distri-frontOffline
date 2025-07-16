@@ -22,46 +22,50 @@ function AppHeader() {
 
   // ✅ NAVEGACIÓN OFFLINE INTELIGENTE
   const handleOfflineNavigation = (href) => {
-    // Lista de rutas que SÍ funcionan offline
-    const offlineRoutes = [
-      '/ventas/RegistrarPedido',
-      '/inicio',
-      '/login',
-      '/'
-    ];
-    
-    if (offlineRoutes.includes(href)) {
-      // Navegación segura offline
-      console.log(`🔄 Navegación offline segura a: ${href}`);
-      window.location.href = href;
+  // Lista de rutas que SÍ funcionan offline
+  const offlineRoutes = [
+    '/ventas/RegistrarPedido',
+    '/inicio',
+    '/login',
+    '/'
+  ];
+  
+  if (offlineRoutes.includes(href)) {
+    // ✅ USAR ROUTER CLIENT-SIDE en lugar de window.location.href
+    console.log(`🔄 Navegación offline client-side a: ${href}`);
+    router.push(href); // ← ESTE ES EL CAMBIO CLAVE
+  } else {
+    // Mostrar mensaje para rutas no disponibles offline
+    toast.warning('Esta sección requiere conexión a internet', {
+      duration: 3000,
+      icon: '📴'
+    });
+    console.log(`⚠️ Ruta bloqueada offline: ${href}`);
+  }
+};
+
+// ✅ COMPONENTE LINK MEJORADO - Evitar doble navegación
+const MenuLink = ({ href, className, children }) => {
+  const handleClick = (e) => {
+    e.preventDefault(); // ← PREVENIR NAVEGACIÓN AUTOMÁTICA
+
+    if (isPWA && !isOnline) {
+      handleOfflineNavigation(href);
     } else {
-      // Mostrar mensaje para rutas no disponibles offline
-      toast.warning('Esta sección requiere conexión a internet', {
-        duration: 3000,
-        icon: '📴'
-      });
-      console.log(`⚠️ Ruta bloqueada offline: ${href}`);
+      // ✅ NAVEGACIÓN ONLINE NORMAL con router
+      console.log(`🌐 Navegación online a: ${href}`);
+      router.push(href);
     }
+    
+    handleMenuItemClick(); // Cerrar menús
   };
 
-  // ✅ COMPONENTE LINK CON NAVEGACIÓN OFFLINE
-  const MenuLink = ({ href, className, children }) => {
-    const handleClick = (e) => {
-      if (isPWA && !isOnline) {
-        e.preventDefault();
-        handleOfflineNavigation(href);
-      } else {
-        // Navegación normal online
-        handleMenuItemClick();
-      }
-    };
-
-    return (
-      <LinkGuard href={href} className={className} onClick={handleClick}>
-        {children}
-      </LinkGuard>
-    );
-  };
+  return (
+    <a href={href} className={className} onClick={handleClick}>
+      {children}
+    </a>
+  );
+};
 
   useEffect(() => {
     // Obtener rol y datos del empleado
