@@ -6,7 +6,7 @@ import { FiX, FiMenu, FiWifi, FiWifiOff } from 'react-icons/fi';
 import Head from 'next/head';
 import { getAppMode } from '../utils/offlineManager';
 import { useConnection } from '../utils/ConnectionManager';
-import { LinkGuard } from './OfflineGuard'; // Solo LinkGuard
+
 
 function AppHeader() {
   const [showMenu, setShowMenu] = useState(false);
@@ -83,14 +83,7 @@ function AppHeader() {
     return 'Usuario';
   };
 
-  // ✅ COMPONENTE LINK SIMPLIFICADO
-  const MenuLink = ({ href, className, children }) => {
-    return (
-      <LinkGuard href={href} className={className} onClick={handleMenuItemClick}>
-        {children}
-      </LinkGuard>
-    );
-  };
+  
 
   // ✅ VARIANTES DE ANIMACIÓN
   const subMenuVariants = {
