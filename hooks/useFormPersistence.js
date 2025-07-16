@@ -1,316 +1,269 @@
-// hooks/useFormPersistence.js - Hook para persistir formularios entre cambios de conectividad
-import { useEffect, useRef, useCallback } from 'react';
-import { toast } from 'react-hot-toast';
+// hooks/useFormPersistence.js - Sistema de persistencia mejorado y robusto
+import { useCallback } from 'react';
 
-const STORAGE_KEY = 'vertimar_form_backup';
-const AUTO_SAVE_INTERVAL = 60000; // 60 segundos
+const STORAGE_KEYS = {
+  PEDIDO_ESTADO_COMPLETO: 'vertimar_pedido_estado_completo',
+  PEDIDO_BACKUP: 'vertimar_pedido_backup',
+  PEDIDO_METADATA: 'vertimar_pedido_metadata'
+};
 
-export function useFormPersistence(formKey, formData, options = {}) {
-  const {
-    enabled = true,
-    autoSaveInterval = AUTO_SAVE_INTERVAL,
-    onRestore = null,
-    onSave = null,
-    showToasts = false // ✅ TOASTS DESHABILITADOS POR DEFECTO
-  } = options;
-
-  const autoSaveRef = useRef(null);
-  const lastSaveRef = useRef(null);
-  const isRestoringRef = useRef(false);
-
-  // ✅ CLAVE ÚNICA PARA ESTE FORMULARIO
-  const storageKey = `${STORAGE_KEY}_${formKey}`;
-
-  // ✅ GUARDAR FORMULARIO EN LOCALSTORAGE
-  const saveForm = useCallback((data = formData, showToast = false) => {
-    if (!enabled || isRestoringRef.current) return;
-
+export function usePedidosFormPersistence(datosFormulario) {
+  // ✅ GUARDAR ESTADO COMPLETO CON METADATOS
+  const saveForm = useCallback(() => {
     try {
-      const formBackup = {
-        data,
+      const estadoCompleto = {
+        ...datosFormulario,
         timestamp: Date.now(),
-        formKey,
-        version: '1.0'
+        route: '/ventas/RegistrarPedido',
+        version: '2.0',
+        userAgent: navigator.userAgent,
+        sessionId: getOrCreateSessionId()
       };
-
-      localStorage.setItem(storageKey, JSON.stringify(formBackup));
-      lastSaveRef.current = Date.now();
-
-      // ✅ TOASTS ELIMINADOS - Auto-save silencioso
-      console.log(`💾 Formulario ${formKey} guardado automáticamente`);
       
-      // Callback personalizado
-      if (onSave) {
-        onSave(data, formBackup);
-      }
-
+      // ✅ Guardar en múltiples claves para redundancia
+      localStorage.setItem(STORAGE_KEYS.PEDIDO_ESTADO_COMPLETO, JSON.stringify(estadoCompleto));
+      localStorage.setItem(STORAGE_KEYS.PEDIDO_BACKUP, JSON.stringify(estadoCompleto));
+      
+      // ✅ Metadatos separados para verificación rápida
+      const metadata = {
+        hasCliente: !!datosFormulario.cliente,
+        productosCount: datosFormulario.productos?.length || 0,
+        observacionesLength: datosFormulario.observaciones?.length || 0,
+        total: datosFormulario.total || 0,
+        lastSaved: Date.now()
+      };
+      
+      localStorage.setItem(STORAGE_KEYS.PEDIDO_METADATA, JSON.stringify(metadata));
+      
+      console.log('💾 [FormPersistence] Estado guardado con redundancia');
+      return true;
     } catch (error) {
-      console.error('❌ Error guardando formulario:', error);
-      // ✅ TOASTS ELIMINADOS - Errores silenciosos
+      console.error('❌ [FormPersistence] Error guardando formulario:', error);
+      return false;
     }
-  }, [formData, enabled, formKey, storageKey, onSave, showToasts]);
+  }, [datosFormulario]);
 
-  // ✅ RESTAURAR FORMULARIO DESDE LOCALSTORAGE
+  // ✅ RESTAURAR ESTADO CON VALIDACIÓN
   const restoreForm = useCallback(() => {
-    if (!enabled) return null;
-
     try {
-      const saved = localStorage.getItem(storageKey);
+      // ✅ Intentar con estado completo primero
+      let estadoGuardado = localStorage.getItem(STORAGE_KEYS.PEDIDO_ESTADO_COMPLETO);
       
-      if (!saved) {
-        console.log(`📄 No hay backup para formulario ${formKey}`);
+      if (!estadoGuardado) {
+        // ✅ Fallback al backup
+        estadoGuardado = localStorage.getItem(STORAGE_KEYS.PEDIDO_BACKUP);
+        console.log('🔄 [FormPersistence] Usando backup para restaurar');
+      }
+      
+      if (!estadoGuardado) {
+        console.log('ℹ️ [FormPersistence] No hay estado guardado para restaurar');
         return null;
       }
-
-      const formBackup = JSON.parse(saved);
       
-      // Verificar que no sea muy antiguo (máximo 24 horas)
-      const twentyFourHours = 24 * 60 * 60 * 1000;
-      const isOld = (Date.now() - formBackup.timestamp) > twentyFourHours;
+      const estado = JSON.parse(estadoGuardado);
       
-      if (isOld) {
-        console.log(`📄 Backup de formulario ${formKey} muy antiguo, eliminando`);
+      // ✅ Validar que el estado no sea muy antiguo (más de 24 horas)
+      const horasTranscurridas = (Date.now() - estado.timestamp) / (1000 * 60 * 60);
+      if (horasTranscurridas > 24) {
+        console.log('⏰ [FormPersistence] Estado muy antiguo, descartando');
         clearSavedForm();
         return null;
       }
-
-      console.log(`🔄 Restaurando formulario ${formKey} desde backup`);
       
-      // ✅ TOASTS ELIMINADOS - Restauración silenciosa
-      
-      // Callback personalizado
-      if (onRestore) {
-        onRestore(formBackup.data, formBackup);
+      // ✅ Validar integridad del estado
+      if (!validateEstado(estado)) {
+        console.log('⚠️ [FormPersistence] Estado corrupto, descartando');
+        clearSavedForm();
+        return null;
       }
-
-      return formBackup.data;
-
+      
+      console.log('✅ [FormPersistence] Estado restaurado exitosamente');
+      return estado;
+      
     } catch (error) {
-      console.error('❌ Error restaurando formulario:', error);
-      clearSavedForm();
+      console.error('❌ [FormPersistence] Error restaurando formulario:', error);
+      
+      // ✅ Intentar limpiar datos corruptos
+      try {
+        clearSavedForm();
+      } catch (cleanupError) {
+        console.error('❌ [FormPersistence] Error limpiando datos corruptos:', cleanupError);
+      }
+      
       return null;
     }
-  }, [enabled, formKey, storageKey, onRestore, showToasts]);
+  }, []);
+
+  // ✅ VERIFICAR SI HAY FORMULARIO GUARDADO
+  const hasSavedForm = useCallback(() => {
+    try {
+      const metadata = localStorage.getItem(STORAGE_KEYS.PEDIDO_METADATA);
+      if (!metadata) return false;
+      
+      const meta = JSON.parse(metadata);
+      
+      // ✅ Verificar que hay contenido significativo
+      const tieneContenido = meta.hasCliente || meta.productosCount > 0 || meta.observacionesLength > 0;
+      
+      // ✅ Verificar que no sea muy antiguo
+      const horasTranscurridas = (Date.now() - meta.lastSaved) / (1000 * 60 * 60);
+      const noMuyAntiguo = horasTranscurridas <= 24;
+      
+      return tieneContenido && noMuyAntiguo;
+    } catch (error) {
+      console.error('❌ [FormPersistence] Error verificando formulario guardado:', error);
+      return false;
+    }
+  }, []);
+
+  // ✅ OBTENER INFORMACIÓN DEL FORMULARIO GUARDADO
+  const getSavedFormInfo = useCallback(() => {
+    try {
+      const metadata = localStorage.getItem(STORAGE_KEYS.PEDIDO_METADATA);
+      if (!metadata) return null;
+      
+      const meta = JSON.parse(metadata);
+      
+      return {
+        hasCliente: meta.hasCliente,
+        productosCount: meta.productosCount,
+        observacionesLength: meta.observacionesLength,
+        total: meta.total,
+        lastSaved: new Date(meta.lastSaved),
+        antigüedadHoras: (Date.now() - meta.lastSaved) / (1000 * 60 * 60)
+      };
+    } catch (error) {
+      console.error('❌ [FormPersistence] Error obteniendo info del formulario:', error);
+      return null;
+    }
+  }, []);
 
   // ✅ LIMPIAR FORMULARIO GUARDADO
   const clearSavedForm = useCallback(() => {
     try {
-      localStorage.removeItem(storageKey);
-      console.log(`🧹 Backup de formulario ${formKey} eliminado`);
+      localStorage.removeItem(STORAGE_KEYS.PEDIDO_ESTADO_COMPLETO);
+      localStorage.removeItem(STORAGE_KEYS.PEDIDO_BACKUP);
+      localStorage.removeItem(STORAGE_KEYS.PEDIDO_METADATA);
+      console.log('🧹 [FormPersistence] Formulario guardado limpiado');
+      return true;
     } catch (error) {
-      console.error('❌ Error limpiando formulario guardado:', error);
-    }
-  }, [storageKey, formKey]);
-
-  // ✅ VERIFICAR SI HAY BACKUP DISPONIBLE
-  const hasSavedForm = useCallback(() => {
-    try {
-      const saved = localStorage.getItem(storageKey);
-      if (!saved) return false;
-
-      const formBackup = JSON.parse(saved);
-      const twentyFourHours = 24 * 60 * 60 * 1000;
-      const isOld = (Date.now() - formBackup.timestamp) > twentyFourHours;
-
-      return !isOld;
-    } catch {
+      console.error('❌ [FormPersistence] Error limpiando formulario:', error);
       return false;
     }
-  }, [storageKey]);
+  }, []);
 
-  // ✅ OBTENER INFORMACIÓN DEL BACKUP
-  const getSavedFormInfo = useCallback(() => {
+  // ✅ FORZAR GUARDADO INMEDIATO
+  const forceSave = useCallback(() => {
+    console.log('⚡ [FormPersistence] Guardado forzado inmediato');
+    return saveForm();
+  }, [saveForm]);
+
+  // ✅ VERIFICAR INTEGRIDAD DEL STORAGE
+  const checkStorageIntegrity = useCallback(() => {
     try {
-      const saved = localStorage.getItem(storageKey);
-      if (!saved) return null;
-
-      const formBackup = JSON.parse(saved);
+      const estadoCompleto = localStorage.getItem(STORAGE_KEYS.PEDIDO_ESTADO_COMPLETO);
+      const backup = localStorage.getItem(STORAGE_KEYS.PEDIDO_BACKUP);
+      const metadata = localStorage.getItem(STORAGE_KEYS.PEDIDO_METADATA);
       
-      return {
-        timestamp: formBackup.timestamp,
-        age: Date.now() - formBackup.timestamp,
-        formattedAge: formatAge(Date.now() - formBackup.timestamp),
-        isValid: (Date.now() - formBackup.timestamp) < (24 * 60 * 60 * 1000)
+      const integrity = {
+        hasEstadoCompleto: !!estadoCompleto,
+        hasBackup: !!backup,
+        hasMetadata: !!metadata,
+        estadoValidCompleto: estadoCompleto ? validateJSON(estadoCompleto) : false,
+        backupValidCompleto: backup ? validateJSON(backup) : false,
+        metadataValidCompleto: metadata ? validateJSON(metadata) : false
       };
-    } catch {
-      return null;
-    }
-  }, [storageKey]);
-
-  // ✅ AUTO-SAVE INTELIGENTE
-  useEffect(() => {
-    if (!enabled || !formData) return;
-
-    // Limpiar intervalo anterior
-    if (autoSaveRef.current) {
-      clearInterval(autoSaveRef.current);
-    }
-
-    // Configurar auto-save solo si hay datos significativos
-    const hasSignificantData = checkSignificantData(formData);
-    
-    if (hasSignificantData) {
-      autoSaveRef.current = setInterval(() => {
-        // Solo guardar si han pasado al menos 30 segundos desde el último save
-        const timeSinceLastSave = Date.now() - (lastSaveRef.current || 0);
-        if (timeSinceLastSave >= 30000) {
-          saveForm(formData, false); // Sin toast para auto-save
-        }
-      }, autoSaveInterval);
-
-      console.log(`⏰ Auto-save configurado para formulario ${formKey} (cada ${autoSaveInterval/1000}s)`);
-    }
-
-    return () => {
-      if (autoSaveRef.current) {
-        clearInterval(autoSaveRef.current);
-      }
-    };
-  }, [enabled, formData, autoSaveInterval, formKey, saveForm]);
-
-  // ✅ SAVE MANUAL AL CAMBIAR CONECTIVIDAD
-  const saveOnConnectivityChange = useCallback(() => {
-    if (enabled && formData && checkSignificantData(formData)) {
-      saveForm(formData, true); // Con toast para saves manuales
-    }
-  }, [enabled, formData, saveForm]);
-
-  // ✅ RESTORE AUTOMÁTICO AL MONTAR COMPONENTE
-  useEffect(() => {
-    if (enabled) {
-      isRestoringRef.current = true;
       
-      setTimeout(() => {
-        isRestoringRef.current = false;
-      }, 1000);
+      integrity.isHealthy = integrity.hasEstadoCompleto && integrity.estadoValidCompleto;
+      integrity.hasValidBackup = integrity.hasBackup && integrity.backupValidCompleto;
+      
+      return integrity;
+    } catch (error) {
+      console.error('❌ [FormPersistence] Error verificando integridad:', error);
+      return { isHealthy: false, error: error.message };
     }
-  }, [enabled]);
-
-  // ✅ CLEANUP AL DESMONTAR
-  useEffect(() => {
-    return () => {
-      if (autoSaveRef.current) {
-        clearInterval(autoSaveRef.current);
-      }
-    };
   }, []);
 
   return {
+    // ✅ Funciones principales
     saveForm,
     restoreForm,
     clearSavedForm,
     hasSavedForm,
     getSavedFormInfo,
-    saveOnConnectivityChange,
     
-    // Información de estado
-    isAutoSaveActive: !!autoSaveRef.current,
-    lastSaveTime: lastSaveRef.current,
-    storageKey
+    // ✅ Funciones avanzadas
+    forceSave,
+    checkStorageIntegrity,
+    
+    // ✅ Información de debug
+    getDebugInfo: () => ({
+      storageKeys: STORAGE_KEYS,
+      hasData: hasSavedForm(),
+      integrity: checkStorageIntegrity(),
+      formData: datosFormulario
+    })
   };
 }
 
-// ✅ FUNCIONES HELPER
-function checkSignificantData(formData) {
-  if (!formData || typeof formData !== 'object') return false;
+// ✅ FUNCIONES HELPER PRIVADAS
 
-  // Verificar si hay datos significativos
-  const hasCliente = formData.cliente && formData.cliente.id;
-  const hasProductos = formData.productos && formData.productos.length > 0;
-  const hasObservaciones = formData.observaciones && formData.observaciones.trim().length > 0;
-
-  return hasCliente || hasProductos || hasObservaciones;
-}
-
-function formatAge(ms) {
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-
-  if (hours > 0) {
-    return `${hours}h ${minutes % 60}m`;
-  } else if (minutes > 0) {
-    return `${minutes}m`;
-  } else {
-    return `${seconds}s`;
-  }
-}
-
-// ✅ HOOK SIMPLIFICADO PARA PEDIDOS (SIN TOASTS)
-export function usePedidosFormPersistence(pedidosContextData) {
-  const formData = {
-    cliente: pedidosContextData.cliente,
-    productos: pedidosContextData.productos,
-    observaciones: pedidosContextData.observaciones,
-    subtotal: pedidosContextData.subtotal,
-    totalIva: pedidosContextData.totalIva,
-    total: pedidosContextData.total,
-    totalProductos: pedidosContextData.totalProductos
-  };
-
-  return useFormPersistence('registrar_pedido', formData, {
-    enabled: true,
-    autoSaveInterval: 60000, // 1 minuto
-    showToasts: false, // ✅ TOASTS COMPLETAMENTE DESHABILITADOS
-    onRestore: (data) => {
-      console.log('🔄 Datos de pedido restaurados silenciosamente:', data);
-    },
-    onSave: (data) => {
-      console.log('💾 Datos de pedido guardados silenciosamente:', {
-        cliente: data.cliente?.nombre,
-        productos: data.productos?.length,
-        total: data.total
-      });
+function validateEstado(estado) {
+  try {
+    // ✅ Verificar estructura básica
+    if (!estado || typeof estado !== 'object') return false;
+    
+    // ✅ Verificar que tenga timestamp
+    if (!estado.timestamp || typeof estado.timestamp !== 'number') return false;
+    
+    // ✅ Verificar que tenga al menos uno de los campos principales
+    const tieneCliente = estado.cliente && typeof estado.cliente === 'object';
+    const tieneProductos = Array.isArray(estado.productos) && estado.productos.length > 0;
+    const tieneObservaciones = estado.observaciones && estado.observaciones.length > 0;
+    
+    if (!tieneCliente && !tieneProductos && !tieneObservaciones) return false;
+    
+    // ✅ Validar estructura de productos si existen
+    if (tieneProductos) {
+      const productosValidos = estado.productos.every(producto => 
+        producto.id && 
+        producto.nombre && 
+        typeof producto.cantidad === 'number' && 
+        typeof producto.precio === 'number'
+      );
+      if (!productosValidos) return false;
     }
-  });
-}
-
-// ✅ UTILIDAD PARA LIMPIAR TODOS LOS BACKUPS
-export function clearAllFormBackups() {
-  try {
-    const keys = Object.keys(localStorage);
-    const backupKeys = keys.filter(key => key.startsWith(STORAGE_KEY));
     
-    backupKeys.forEach(key => {
-      localStorage.removeItem(key);
-    });
+    // ✅ Validar estructura de cliente si existe
+    if (tieneCliente) {
+      if (!estado.cliente.nombre || !estado.cliente.id) return false;
+    }
     
-    console.log(`🧹 Eliminados ${backupKeys.length} backups de formularios`);
-    
-    return backupKeys.length;
+    return true;
   } catch (error) {
-    console.error('❌ Error limpiando backups:', error);
-    return 0;
+    console.error('❌ [FormPersistence] Error validando estado:', error);
+    return false;
   }
 }
 
-// ✅ UTILIDAD PARA OBTENER INFORMACIÓN DE TODOS LOS BACKUPS
-export function getAllFormBackupsInfo() {
+function validateJSON(jsonString) {
   try {
-    const keys = Object.keys(localStorage);
-    const backupKeys = keys.filter(key => key.startsWith(STORAGE_KEY));
-    
-    return backupKeys.map(key => {
-      try {
-        const data = JSON.parse(localStorage.getItem(key));
-        return {
-          key,
-          formKey: data.formKey,
-          timestamp: data.timestamp,
-          age: Date.now() - data.timestamp,
-          formattedAge: formatAge(Date.now() - data.timestamp),
-          isValid: (Date.now() - data.timestamp) < (24 * 60 * 60 * 1000),
-          size: JSON.stringify(data).length
-        };
-      } catch {
-        return {
-          key,
-          error: 'Datos corruptos'
-        };
-      }
-    });
+    JSON.parse(jsonString);
+    return true;
   } catch (error) {
-    console.error('❌ Error obteniendo info de backups:', error);
-    return [];
+    return false;
+  }
+}
+
+function getOrCreateSessionId() {
+  try {
+    let sessionId = sessionStorage.getItem('vertimar_session_id');
+    if (!sessionId) {
+      sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      sessionStorage.setItem('vertimar_session_id', sessionId);
+    }
+    return sessionId;
+  } catch (error) {
+    return `fallback_${Date.now()}`;
   }
 }

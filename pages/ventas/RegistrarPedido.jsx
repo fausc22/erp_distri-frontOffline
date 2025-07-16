@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
 import { toast } from 'react-hot-toast';
 import useAuth from '../../hooks/useAuth';
@@ -47,13 +47,21 @@ function RegistrarPedidoContent() {
   const [mostrarModalReconexion, setMostrarModalReconexion] = useState(false);
   const [modoForzadoOffline, setModoForzadoOffline] = useState(false);
   const [loadingConexion, setLoadingConexion] = useState(false);
-  const [interfazLocked, setInterfazLocked] = useState(false); // Nueva: evitar cambios automáticos
+  const [interfazLocked, setInterfazLocked] = useState(false);
+
+  // ✅ NUEVOS ESTADOS PARA PERSISTENCIA
+  const [estadoInicializado, setEstadoInicializado] = useState(false);
+  const [ultimoEstadoConexion, setUltimoEstadoConexion] = useState(null);
+  
+  // ✅ REF PARA EVITAR MÚLTIPLES INICIALIZACIONES
+  const inicializacionCompletada = useRef(false);
+  const formRestaurado = useRef(false);
 
   // ✅ CONNECTION MANAGER - Solo para estado, NO para cambios automáticos
   const { isOnline, eventType, checkOnDemand } = useConnection();
   const isPWA = getAppMode() === 'pwa';
 
-  // ✅ FORM PERSISTENCE
+  // ✅ FORM PERSISTENCE MEJORADO
   const {
     saveForm,
     restoreForm,
@@ -70,106 +78,233 @@ function RegistrarPedidoContent() {
     totalProductos
   });
 
-  // ✅ DETECTAR MODO INICIAL Y LOCKEAR INTERFAZ
-  useEffect(() => {
-    if (isPWA && !isOnline) {
-      console.log('📱 [RegistrarPedido] Página cargada OFFLINE - Activando modo offline estable PERMANENTE');
-      setModoForzadoOffline(true);
-      setInterfazLocked(true); // ✅ NUEVO: Bloquear cambios automáticos
-    } else if (isPWA && isOnline) {
-      console.log('🌐 [RegistrarPedido] Página cargada ONLINE - Modo online inicial');
-      setModoForzadoOffline(false);
-      setInterfazLocked(false);
+  // ✅ PERSISTENCIA INMEDIATA EN LOCALSTORAGE
+  const guardarEstadoCompleto = () => {
+    if (!estadoInicializado) return;
+    
+    try {
+      const estadoCompleto = {
+        cliente,
+        productos,
+        observaciones,
+        modoForzadoOffline,
+        interfazLocked,
+        timestamp: Date.now(),
+        route: '/ventas/RegistrarPedido'
+      };
+      
+      localStorage.setItem('vertimar_pedido_estado_completo', JSON.stringify(estadoCompleto));
+      console.log('💾 [Estado] Estado completo guardado en localStorage');
+    } catch (error) {
+      console.error('❌ [Estado] Error guardando estado completo:', error);
     }
-  }, []); // ✅ Solo ejecutar UNA VEZ al cargar
+  };
+
+  const restaurarEstadoCompleto = () => {
+    if (formRestaurado.current) return false;
+    
+    try {
+      const estadoGuardado = localStorage.getItem('vertimar_pedido_estado_completo');
+      if (!estadoGuardado) return false;
+      
+      const estado = JSON.parse(estadoGuardado);
+      
+      // Verificar que el estado no sea muy antiguo (más de 24 horas)
+      const horasTranscurridas = (Date.now() - estado.timestamp) / (1000 * 60 * 60);
+      if (horasTranscurridas > 24) {
+        console.log('⏰ [Estado] Estado guardado muy antiguo, descartando');
+        localStorage.removeItem('vertimar_pedido_estado_completo');
+        return false;
+      }
+      
+      console.log('🔄 [Estado] Restaurando estado completo desde localStorage');
+      
+      // Restaurar cliente
+      if (estado.cliente) {
+        setCliente(estado.cliente);
+      }
+      
+      // Restaurar productos
+      if (estado.productos && estado.productos.length > 0) {
+        addMultipleProductos(estado.productos);
+      }
+      
+      // Restaurar observaciones
+      if (estado.observaciones) {
+        setObservaciones(estado.observaciones);
+      }
+      
+      // Restaurar estados de modo
+      setModoForzadoOffline(estado.modoForzadoOffline || false);
+      setInterfazLocked(estado.interfazLocked || false);
+      
+      formRestaurado.current = true;
+      
+      const itemsRestaurados = [];
+      if (estado.cliente) itemsRestaurados.push('cliente');
+      if (estado.productos?.length > 0) itemsRestaurados.push(`${estado.productos.length} productos`);
+      if (estado.observaciones) itemsRestaurados.push('observaciones');
+      
+      if (itemsRestaurados.length > 0) {
+        toast.success(`🔄 Estado restaurado: ${itemsRestaurados.join(', ')}`, {
+          duration: 4000,
+          icon: '💾'
+        });
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('❌ [Estado] Error restaurando estado completo:', error);
+      return false;
+    }
+  };
+
+  // ✅ INICIALIZACIÓN ÚNICA Y DETECCIÓN DE MODO INICIAL
+  useEffect(() => {
+    if (inicializacionCompletada.current) return;
+    
+    console.log('🚀 [RegistrarPedido] Inicialización única comenzando...');
+    
+    // Restaurar estado antes de detectar modo
+    const estadoRestaurado = restaurarEstadoCompleto();
+    
+    // Detectar modo inicial
+    if (isPWA && !isOnline) {
+      console.log('📱 [RegistrarPedido] Inicialización OFFLINE - Activando modo offline estable');
+      setModoForzadoOffline(true);
+      setInterfazLocked(true);
+    } else if (isPWA && isOnline) {
+      console.log('🌐 [RegistrarPedido] Inicialización ONLINE - Modo online disponible');
+      // Solo si no hay estado restaurado que indique modo forzado
+      if (!estadoRestaurado) {
+        setModoForzadoOffline(false);
+        setInterfazLocked(false);
+      }
+    }
+    
+    setUltimoEstadoConexion(isOnline);
+    setEstadoInicializado(true);
+    inicializacionCompletada.current = true;
+    
+    console.log('✅ [RegistrarPedido] Inicialización única completada');
+  }, []); // ✅ Solo ejecutar UNA VEZ
 
   // ✅ CARGAR ESTADÍSTICAS PWA
   useEffect(() => {
     if (isPWA) {
       const stats = offlineManager.getStorageStats();
       setCatalogStats(stats);
-      console.log('📊 [RegistrarPedido] Estadísticas del catálogo:', stats);
     }
   }, [isPWA]);
 
-  // ✅ MANEJO DE EVENTOS DE CONECTIVIDAD - SOLO LOGGING, NUNCA CAMBIOS AUTOMÁTICOS
+  // ✅ MANEJO DE EVENTOS DE CONECTIVIDAD - SIN REINICIALIZACIÓN
   useEffect(() => {
-    if (!eventType) return;
+    if (!eventType || !estadoInicializado) return;
 
     // ✅ SI LA INTERFAZ ESTÁ BLOQUEADA, NO HACER NADA
     if (interfazLocked) {
-      console.log(`🔒 [RegistrarPedido] Evento ${eventType} ignorado - Interfaz bloqueada en modo estable`);
+      console.log(`🔒 [RegistrarPedido] Evento ${eventType} ignorado - Interfaz bloqueada`);
       return;
     }
 
-    switch (eventType) {
-      case 'connection_lost':
-        console.log('📴 [RegistrarPedido] Conexión perdida detectada - SOLO LOGGING, SIN CAMBIOS');
-        // ✅ SOLO actualizar estadísticas
-        if (isPWA) {
-          const stats = offlineManager.getStorageStats();
-          setCatalogStats(stats);
-        }
-        break;
-        
-      case 'connection_restored':
-        console.log('🌐 [RegistrarPedido] Conexión restaurada detectada - SOLO LOGGING, SIN CAMBIOS');
-        // ✅ SOLO actualizar estadísticas
-        if (isPWA) {
-          const stats = offlineManager.getStorageStats();
-          setCatalogStats(stats);
-        }
-        break;
-        
-      default:
-        break;
+    // ✅ DETECTAR CAMBIOS DE CONEXIÓN SIN PERDER ESTADO
+    const conexionAnterior = ultimoEstadoConexion;
+    const conexionActual = isOnline;
+    
+    if (conexionAnterior !== conexionActual) {
+      console.log(`🔄 [RegistrarPedido] Cambio de conexión: ${conexionAnterior ? 'Online' : 'Offline'} → ${conexionActual ? 'Online' : 'Offline'}`);
+      
+      // ✅ GUARDAR ESTADO ANTES DEL CAMBIO
+      guardarEstadoCompleto();
+      
+      switch (eventType) {
+        case 'connection_lost':
+          console.log('📴 [RegistrarPedido] Transición a offline - MANTENIENDO ESTADO');
+          // ✅ NO cambiar modos si ya está en modo forzado
+          if (!modoForzadoOffline) {
+            // Solo actualizar indicadores visuales
+          }
+          break;
+          
+        case 'connection_restored':
+          console.log('🌐 [RegistrarPedido] Transición a online - MANTENIENDO ESTADO');
+          // ✅ NO resetear interfaz, solo actualizar indicadores
+          break;
+          
+        default:
+          break;
+      }
+      
+      setUltimoEstadoConexion(conexionActual);
     }
-  }, [eventType, isPWA, interfazLocked]);
 
-  // ✅ AUTO-RESTORE DE BACKUP
+    // ✅ SIEMPRE actualizar estadísticas
+    if (isPWA) {
+      const stats = offlineManager.getStorageStats();
+      setCatalogStats(stats);
+    }
+  }, [eventType, isOnline, estadoInicializado, interfazLocked, ultimoEstadoConexion, modoForzadoOffline, isPWA]);
+
+  // ✅ AUTO-RESTORE DE BACKUP FALLBACK (por si localStorage falla)
   useEffect(() => {
+    if (!estadoInicializado || formRestaurado.current) return;
+    
+    // Intentar con el sistema de persistencia tradicional como fallback
     if (hasSavedForm()) {
+      console.log('🔄 [RegistrarPedido] Usando sistema de persistencia fallback');
       const savedData = restoreForm();
       
       if (savedData) {
         let itemsRestored = [];
         
-        if (savedData.cliente) {
+        if (savedData.cliente && !cliente) {
           setCliente(savedData.cliente);
           itemsRestored.push('cliente');
         }
         
-        if (savedData.observaciones) {
+        if (savedData.observaciones && !observaciones) {
           setObservaciones(savedData.observaciones);
           itemsRestored.push('observaciones');
         }
         
-        if (savedData.productos && savedData.productos.length > 0) {
+        if (savedData.productos && savedData.productos.length > 0 && productos.length === 0) {
           addMultipleProductos(savedData.productos);
           itemsRestored.push(`${savedData.productos.length} productos`);
         }
         
         if (itemsRestored.length > 0) {
-          toast.success(`📄 Formulario restaurado: ${itemsRestored.join(', ')}`, {
+          toast.success(`📄 Backup restaurado: ${itemsRestored.join(', ')}`, {
             duration: 4000
           });
         }
         
         clearSavedForm();
+        formRestaurado.current = true;
       }
     }
-  }, []);
+  }, [estadoInicializado]);
 
-  // ✅ AUTO-SAVE PERIÓDICO
+  // ✅ AUTO-SAVE CONTINUO CON AMBOS SISTEMAS
   useEffect(() => {
+    if (!estadoInicializado) return;
+    
     if (cliente || productos.length > 0 || observaciones.trim()) {
-      const autoSaveInterval = setInterval(() => {
-        saveForm();
-      }, 60000); // 1 minuto
+      // Guardar en ambos sistemas
+      const interval = setInterval(() => {
+        saveForm(); // Sistema tradicional
+        guardarEstadoCompleto(); // Sistema completo
+      }, 30000); // Cada 30 segundos
 
-      return () => clearInterval(autoSaveInterval);
+      return () => clearInterval(interval);
     }
-  }, [cliente, productos, observaciones, saveForm]);
+  }, [cliente, productos, observaciones, estadoInicializado, saveForm]);
+
+  // ✅ GUARDAR ESTADO EN CADA CAMBIO IMPORTANTE
+  useEffect(() => {
+    if (estadoInicializado) {
+      guardarEstadoCompleto();
+    }
+  }, [cliente, productos, observaciones, modoForzadoOffline, interfazLocked, estadoInicializado]);
 
   const handleConfirmarPedido = () => {
     if (!cliente) {
@@ -185,7 +320,7 @@ function RegistrarPedidoContent() {
     setMostrarConfirmacion(true);
   };
 
-  // ✅ REGISTRAR PEDIDO CON VERIFICACIÓN POST-GUARDADO
+  // ✅ REGISTRAR PEDIDO CON LIMPIEZA DE ESTADO
   const handleRegistrarPedido = async () => {
     const datosPedido = getDatosPedido();
     const datosCompletos = {
@@ -198,9 +333,14 @@ function RegistrarPedidoContent() {
     const resultado = await registrarPedido(datosCompletos);
     
     if (resultado.success) {
+      // ✅ LIMPIAR TODOS LOS SISTEMAS DE PERSISTENCIA
       clearSavedForm();
+      localStorage.removeItem('vertimar_pedido_estado_completo');
       clearPedido();
       setMostrarConfirmacion(false);
+      formRestaurado.current = false; // Permitir nueva restauración
+      
+      console.log('🧹 [RegistrarPedido] Estado limpiado después de guardar pedido exitoso');
       
       // Actualizar estadísticas
       if (isPWA) {
@@ -257,7 +397,10 @@ function RegistrarPedidoContent() {
       console.log('🌐 [RegistrarPedido] Conexión confirmada desde modal - Redirigiendo al menú');
       setMostrarModalReconexion(false);
       
-      // Guardar formulario antes de salir
+      // ✅ LIMPIAR ESTADO ANTES DE SALIR
+      localStorage.removeItem('vertimar_pedido_estado_completo');
+      
+      // Guardar formulario actual como backup
       if (cliente || productos.length > 0 || observaciones.trim()) {
         saveForm();
       }
@@ -279,8 +422,11 @@ function RegistrarPedidoContent() {
   const handleSeguirRegistrandoDesdeModal = () => {
     console.log('📱 [RegistrarPedido] Usuario eligió seguir registrando - Activando modo offline estable');
     setModoForzadoOffline(true);
-    setInterfazLocked(true); // ✅ BLOQUEAR interfaz automáticamente
+    setInterfazLocked(true);
     setMostrarModalReconexion(false);
+    
+    // ✅ GUARDAR NUEVA CONFIGURACIÓN
+    guardarEstadoCompleto();
     
     toast.success('📱 Modo offline estable activado - Sin interrupciones automáticas', {
       duration: 4000,
@@ -312,6 +458,10 @@ function RegistrarPedidoContent() {
       // Guardar formulario antes de salir
       if (cliente || productos.length > 0 || observaciones.trim()) {
         saveForm();
+        guardarEstadoCompleto();
+      } else {
+        // Si no hay datos, limpiar estado
+        localStorage.removeItem('vertimar_pedido_estado_completo');
       }
       
       window.location.href = '/inicio';
@@ -330,6 +480,7 @@ function RegistrarPedidoContent() {
     // Guardar formulario antes de salir
     if (cliente || productos.length > 0 || observaciones.trim()) {
       saveForm();
+      guardarEstadoCompleto();
     }
     handleSalirConVerificacion();
   };
@@ -384,7 +535,7 @@ function RegistrarPedidoContent() {
     if (!isPWA) return 'Sistema de gestión de pedidos';
     
     if (modoForzadoOffline) {
-      return 'Modo offline estable - Sin interrupciones por reconexión automática';
+      return 'Modo offline estable - Estado persistente durante cambios de conexión';
     }
     
     return interfaceState.showAsOffline
@@ -392,11 +543,24 @@ function RegistrarPedidoContent() {
       : 'Sistema de gestión de pedidos';
   };
 
+  // ✅ NO RENDERIZAR HASTA QUE ESTÉ INICIALIZADO
+  if (!estadoInicializado) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Inicializando formulario...</p>
+          <p className="text-xs text-gray-500 mt-2">Restaurando estado persistente</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`flex flex-col items-center justify-center min-h-screen ${getPageTheme()} p-4`}>
       <Head>
         <title>VERTIMAR | REGISTRAR PEDIDO</title>
-        <meta name="description" content="Sistema ultra estable de registro de pedidos online/offline" />
+        <meta name="description" content="Sistema ultra estable con persistencia total del estado" />
       </Head>
       
       <div className="bg-white shadow-lg rounded-lg p-6 w-full max-w-6xl">
@@ -412,7 +576,7 @@ function RegistrarPedidoContent() {
                 {getHeaderSubtitle()}
               </p>
               
-              {/* ✅ INDICADOR DE ESTADO ULTRA DETALLADO */}
+              {/* ✅ INDICADOR DE ESTADO CON PERSISTENCIA */}
               {isPWA && (
                 <div className="flex items-center gap-2 mt-2">
                   <div className={`w-3 h-3 rounded-full ${
@@ -422,10 +586,10 @@ function RegistrarPedidoContent() {
                     interfaceState.showAsOffline ? 'text-orange-200' : 'text-green-200'
                   }`}>
                     {modoForzadoOffline 
-                      ? '🔒 Modo offline estable - Bloqueado contra cambios automáticos'
+                      ? '🔒 Estado persistente - Inmune a cambios de conexión'
                       : interfaceState.showAsOffline 
-                        ? '📴 Sin conexión - Guardado local'
-                        : '🌐 Conectado - Guardado directo'
+                        ? '📴 Offline - Estado guardado automáticamente'
+                        : '🌐 Online - Estado sincronizado'
                     }
                   </span>
                 </div>
@@ -440,7 +604,8 @@ function RegistrarPedidoContent() {
                     console.log('🔓 [RegistrarPedido] Usuario desbloqueó modo offline manualmente');
                     setModoForzadoOffline(false);
                     setInterfazLocked(false);
-                    toast.success('🌐 Modo online reactivado manualmente', { duration: 3000 });
+                    guardarEstadoCompleto(); // Guardar cambio
+                    toast.success('🌐 Modo online reactivado - Estado preservado', { duration: 3000 });
                   }}
                   className="mb-2 bg-white bg-opacity-20 hover:bg-opacity-30 px-3 py-1 rounded text-sm transition-colors"
                 >
@@ -460,14 +625,14 @@ function RegistrarPedidoContent() {
           </div>
         </div>
 
-        {/* ✅ INFORMACIÓN PWA OFFLINE ULTRA DETALLADA */}
+        {/* ✅ INFORMACIÓN PWA OFFLINE CON PERSISTENCIA */}
         {isPWA && interfaceState.showAsOffline && catalogStats && (
           <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
             <h3 className="font-semibold text-orange-800 mb-2 flex items-center gap-2">
               📦 Catálogo Offline Disponible
               {modoForzadoOffline && (
                 <span className="bg-orange-200 text-orange-800 px-2 py-1 rounded text-xs font-medium">
-                  🔒 MODO ESTABLE ACTIVO
+                  💾 ESTADO PERSISTENTE
                 </span>
               )}
             </h3>
@@ -496,12 +661,10 @@ function RegistrarPedidoContent() {
               </div>
             )}
             
-            {modoForzadoOffline && (
-              <div className="mt-2 text-sm text-orange-700 font-medium bg-orange-100 p-2 rounded">
-                🔒 <strong>Modo estable activado:</strong> La interfaz permanecerá offline aunque se recupere la conexión. 
-                Los cambios automáticos están bloqueados para garantizar estabilidad total.
-              </div>
-            )}
+            <div className="mt-2 text-sm text-orange-700 font-medium bg-orange-100 p-2 rounded">
+              💾 <strong>Persistencia activa:</strong> Tu formulario se mantiene intacto durante cambios de conectividad. 
+              Estado guardado automáticamente cada 30 segundos.
+            </div>
           </div>
         )}
         
@@ -530,11 +693,11 @@ function RegistrarPedidoContent() {
                   interfaceState.showAsOffline ? 'text-orange-600' : 'text-blue-600'
                 }`}>
                   {modoForzadoOffline 
-                    ? '🔒 PWA Offline Estable Bloqueado (se sincronizará en menú)'
+                    ? '💾 PWA Offline Persistente (inmune a reconexiones)'
                     : interfaceState.showAsOffline 
-                      ? '📱 PWA Offline (se sincronizará)'
+                      ? '📱 PWA Offline (estado auto-guardado)'
                       : isPWA
-                        ? '🌐 PWA Online (directo al servidor)'
+                        ? '🌐 PWA Online (estado sincronizado)'
                         : '🌐 Web Online'
                   }
                 </span>
@@ -593,26 +756,42 @@ function RegistrarPedidoContent() {
           </div>
         </div>
 
-        {/* ✅ INFORMACIÓN ADICIONAL ULTRA DETALLADA */}
+        {/* ✅ INFORMACIÓN ADICIONAL CON PERSISTENCIA */}
         {isPWA && interfaceState.showAsOffline && (
           <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
             <h4 className="font-semibold text-yellow-800 mb-2">
-              ℹ️ Información del Modo Offline{modoForzadoOffline ? ' Estable' : ''}
+              ℹ️ Sistema de Persistencia Ultra Estable
             </h4>
             <div className="text-yellow-700 text-sm space-y-1">
-              <p>• Los pedidos se guardan en tu dispositivo automáticamente</p>
-              <p>• Puedes registrar múltiples pedidos sin conexión</p>
-              <p>• Tus datos se guardan automáticamente cada minuto</p>
+              <p>• <strong>💾 Auto-guardado:</strong> Estado completo guardado cada 30 segundos automáticamente</p>
+              <p>• <strong>🔄 Inmune a reconexiones:</strong> Los datos se mantienen durante cambios de conectividad</p>
+              <p>• <strong>📱 Persistencia dual:</strong> Sistema principal + backup de emergencia</p>
+              <p>• <strong>⚡ Restauración instantánea:</strong> Estado recuperado automáticamente al recargar</p>
               {modoForzadoOffline ? (
                 <>
-                  <p>• <strong>🔒 Modo estable activado:</strong> La interfaz no cambiará automáticamente aunque haya conexión</p>
-                  <p>• <strong>Reconexiones ignoradas:</strong> Los cambios automáticos están completamente bloqueados</p>
-                  <p>• <strong>Sincronización:</strong> Los pedidos se sincronizarán cuando vayas al menú principal manualmente</p>
-                  <p>• <strong>Control total:</strong> Solo tú decides cuándo cambiar al modo online usando el botón de desbloqueo</p>
+                  <p>• <strong>🔒 Modo bloqueado:</strong> Inmune a cambios automáticos hasta que lo desbloquees</p>
+                  <p>• <strong>🌐 Reconexiones ignoradas:</strong> Mantiene modo offline aunque haya internet</p>
+                  <p>• <strong>🎯 Control total:</strong> Solo tú decides cuándo activar el modo online</p>
                 </>
               ) : (
-                <p>• Al reconectarte, podrás elegir si continuar offline o ir al menú principal</p>
+                <p>• <strong>🔄 Transiciones suaves:</strong> Estado preservado durante cambios online/offline</p>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* ✅ INFORMACIÓN DE DEBUG EN DESARROLLO */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+            <h4 className="font-semibold text-gray-800 mb-2">🔧 Debug - Estado de Persistencia</h4>
+            <div className="text-gray-700 text-xs space-y-1">
+              <p><strong>Estado inicializado:</strong> {estadoInicializado ? '✅ Sí' : '❌ No'}</p>
+              <p><strong>Formulario restaurado:</strong> {formRestaurado.current ? '✅ Sí' : '❌ No'}</p>
+              <p><strong>Último estado conexión:</strong> {ultimoEstadoConexion ? 'Online' : 'Offline'}</p>
+              <p><strong>Estado actual conexión:</strong> {isOnline ? 'Online' : 'Offline'}</p>
+              <p><strong>Modo forzado offline:</strong> {modoForzadoOffline ? '✅ Activo' : '❌ Inactivo'}</p>
+              <p><strong>Interfaz bloqueada:</strong> {interfazLocked ? '🔒 Bloqueada' : '🔓 Libre'}</p>
+              <p><strong>Items en formulario:</strong> Cliente: {cliente ? '✅' : '❌'}, Productos: {productos.length}, Observaciones: {observaciones.length} chars</p>
             </div>
           </div>
         )}
