@@ -37,11 +37,15 @@ export default function AppInitializer({ children }) {
       window.removeEventListener('online', updateOnlineStatus);
       window.removeEventListener('offline', updateOnlineStatus);
     };
+
+
   }, []);
+
 
   useEffect(() => {
     initializeApp();
   }, []);
+
 
   const initializeApp = async () => {
     try {
@@ -304,15 +308,7 @@ export default function AppInitializer({ children }) {
             </div>
           </div>
 
-          {/* ✅ TIPS PARA USUARIOS */}
-          {isPWA && (
-            <div className="mt-6 text-xs text-blue-300 bg-blue-800 bg-opacity-30 rounded p-3">
-              <p className="font-semibold mb-2">💡 Tips para PWA:</p>
-              <p>• Funciona sin internet después de la primera carga</p>
-              <p>• Los pedidos se guardan localmente cuando no hay conexión</p>
-              <p>• Se sincroniza automáticamente al recuperar internet</p>
-            </div>
-          )}
+          
         </div>
       </div>
     );

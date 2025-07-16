@@ -66,23 +66,7 @@ export default function OfflineGuard({ children }) {
     }
   }, [router.pathname, isOnline, isPWA, isRedirecting]);
 
-  // ✅ MOSTRAR LOADING DURANTE REDIRECCIÓN
-  if (isRedirecting) {
-    return (
-      <div className="min-h-screen bg-orange-100 flex items-center justify-center">
-        <div className="text-center p-8">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-600 mx-auto mb-4"></div>
-          <h2 className="text-xl font-semibold text-orange-800 mb-2">
-            📴 Activando Modo Offline
-          </h2>
-          <p className="text-orange-600">
-            Cargando página offline dedicada...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
+  
   return children;
 }
 
