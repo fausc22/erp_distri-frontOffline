@@ -10,6 +10,191 @@ import { useConnection } from '../utils/ConnectionManager';
 import { LinkGuard } from './OfflineGuard';
 
 function AppHeader() {
+  const [showMenu, setShowMenu] = useState(false);
+  const [role, setRole] = useState(null);
+  const [empleado, setEmpleado] = useState(null);
+  const [openSubMenu, setOpenSubMenu] = useState(null);
+  const [isPWA, setIsPWA] = useState(false);
+  const router = useRouter();
+
+  // ✅ CONNECTION MANAGER (solo para indicadores visuales)
+  const { isOnline, checkOnDemand } = useConnection();
+
+  // ✅ NAVEGACIÓN CON VERIFICACIÓN DE CONEXIÓN MEJORADA
+  const handleNavigationWithCheck = async (href) => {
+    // ✅ Rutas que siempre están disponibles (registrar pedido funciona offline)
+    const alwaysAvailableRoutes = [
+      '/ventas/RegistrarPedido',
+      '/inicio',
+      '/login',
+      '/'
+    ];
+    
+    // ✅ Rutas que requieren conexión estricta
+    const onlineRequiredRoutes = [
+      '/ventas/HistorialPedidos',
+      '/ventas/ListaPrecios', 
+      '/ventas/Facturacion',
+      '/inventario',
+      '/compras',
+      '/finanzas',
+      '/edicion'
+    ];
+    
+    // ✅ CERRAR MENÚS INMEDIATAMENTE
+    setShowMenu(false);
+    setOpenSubMenu(null);
+    
+    if (alwaysAvailableRoutes.includes(href)) {
+      // ✅ Navegación directa para rutas siempre disponibles
+      console.log(`🔄 Navegación directa a: ${href}`);
+      
+      try {
+        await router.push(href);
+        console.log('✅ Navegación exitosa');
+      } catch (error) {
+        console.log('⚠️ Router falló, forzando navegación directa...');
+        window.location.href = href;
+      }
+      
+    } else if (onlineRequiredRoutes.some(route => href.includes(route))) {
+      // ✅ Verificar conexión para rutas que la requieren
+      console.log(`🔍 Verificando conexión para: ${href}`);
+      
+      const hayConexion = await checkOnDemand();
+      
+      if (hayConexion) {
+        console.log(`🌐 Conexión confirmada, navegando a: ${href}`);
+        try {
+          await router.push(href);
+        } catch (error) {
+          window.location.href = href;
+        }
+      } else {
+        console.log(`📴 Sin conexión, bloqueando navegación a: ${href}`);
+        toast.warning('📴 Esta sección requiere conexión a internet', {
+          duration: 3000,
+          icon: '📴'
+        });
+      }
+      
+    } else {
+      // ✅ Navegación normal para otras rutas
+      try {
+        await router.push(href);
+      } catch (error) {
+        window.location.href = href;
+      }
+    }
+  };
+
+  // ✅ COMPONENTE LINK MEJORADO - Con verificación inteligente
+  const MenuLink = ({ href, className, children, requiresOnline = false }) => {
+    const handleClick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      handleNavigationWithCheck(href);
+    };
+
+    // ✅ Determinar si mostrar como deshabilitado
+    const shouldDisable = isPWA && requiresOnline && !isOnline;
+
+    return (
+      <a 
+        href="#" 
+        className={`${className} ${
+          shouldDisable 
+            ? 'opacity-60 cursor-not-allowed text-gray-400' 
+            : 'hover:bg-gray-100'
+        }`}
+        onClick={shouldDisable ? (e) => e.preventDefault() : handleClick}
+        onTouchStart={(e) => e.preventDefault()}
+        title={shouldDisable ? "Requiere conexión a internet" : ""}
+      >
+        <span className="flex items-center gap-2">
+          {children}
+          {shouldDisable && <span className="text-xs">🔒</span>}
+        </span>
+      </a>
+    );
+  };
+
+  useEffect(() => {
+    // Obtener rol y datos del empleado
+    const roleFromStorage = localStorage.getItem("role");
+    const empleadoFromStorage = localStorage.getItem("empleado");
+    
+    setRole(roleFromStorage);
+    setIsPWA(getAppMode() === 'pwa');
+    
+    if (empleadoFromStorage) {
+      try {
+        const empleadoData = JSON.parse(empleadoFromStorage);
+        setEmpleado(empleadoData);
+      } catch (error) {
+        console.error('Error parsing empleado data:', error);
+        setEmpleado(null);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleRouteChange = () => {
+      setShowMenu(false);
+      setOpenSubMenu(null);
+    };
+
+    router.events.on('routeChangeStart', handleRouteChange);
+
+    return () => {
+      router.events.off('routeChangeStart', handleRouteChange);
+    };
+  }, [router]);
+
+  const handleLogout = () => {
+    localStorage.removeItem("role");
+    localStorage.removeItem("token");
+    localStorage.removeItem("empleado");
+    
+    setRole(null);
+    setEmpleado(null);
+    
+    router.push("/");
+  };
+
+  const toggleMenu = () => {
+    setShowMenu(!showMenu);
+    setOpenSubMenu(null);
+  };
+
+  const toggleSubMenu = (menuName) => {
+    setOpenSubMenu(openSubMenu === menuName ? null : menuName);
+  };
+
+  const handleMenuItemClick = () => {
+    setShowMenu(false);
+    setOpenSubMenu(null);
+  };
+
+  const getUserName = () => {
+    if (empleado?.nombre) {
+      return `${empleado.nombre} ${empleado.apellido || ''}`.trim();
+    }
+    return 'Usuario';
+  };
+
+  // ✅ VARIANTES DE ANIMACIÓN
+  const subMenuVariants = {
+    open: { opacity: 1, y: 0, display: 'block' },
+    closed: { opacity: 0, y: -10, display: 'none' },
+  };
+
+  const logoVariants = {
+    hover: { scale: 1.1 },
+    tap: { scale: 0.9 },
+  };
+
   const menuItemVariants = {
     hover: { scale: 1.05, transition: { duration: 0.2 } },
     tap: { scale: 0.95 },
