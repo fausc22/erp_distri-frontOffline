@@ -21,8 +21,7 @@ function AppHeader() {
   const { isOnline } = useConnection();
 
   // ✅ NAVEGACIÓN OFFLINE INTELIGENTE
-  const handleOfflineNavigation = (href) => {
-  // Lista de rutas que SÍ funcionan offline
+  const handleOfflineNavigation = async (href) => {
   const offlineRoutes = [
     '/ventas/RegistrarPedido',
     '/inicio',
@@ -31,41 +30,77 @@ function AppHeader() {
   ];
   
   if (offlineRoutes.includes(href)) {
-    // ✅ USAR ROUTER CLIENT-SIDE en lugar de window.location.href
-    console.log(`🔄 Navegación offline client-side a: ${href}`);
-    router.push(href); // ← ESTE ES EL CAMBIO CLAVE
+    console.log(`🔄 Navegación offline robusta a: ${href}`);
+    
+    // ✅ CERRAR MENÚS INMEDIATAMENTE
+    setShowMenu(false);
+    setOpenSubMenu(null);
+    
+    // ✅ NAVEGACIÓN FORZADA SIN DEPENDER DE ROUTER
+    try {
+      // Método 1: Router con timeout muy corto
+      const routerPromise = router.push(href);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Router timeout')), 500)
+      );
+      
+      await Promise.race([routerPromise, timeoutPromise]);
+      console.log('✅ Navegación con router exitosa');
+      
+    } catch (error) {
+      console.log('⚠️ Router falló, forzando navegación directa...');
+      
+      // Método 2: Navegación directa forzada
+      setTimeout(() => {
+        try {
+          window.location.assign(href);
+        } catch (assignError) {
+          // Método 3: Última opción
+          window.location.href = href;
+        }
+      }, 50);
+    }
   } else {
-    // Mostrar mensaje para rutas no disponibles offline
     toast.warning('Esta sección requiere conexión a internet', {
       duration: 3000,
       icon: '📴'
     });
-    console.log(`⚠️ Ruta bloqueada offline: ${href}`);
   }
-};
-
-// ✅ COMPONENTE LINK MEJORADO - Evitar doble navegación
-const MenuLink = ({ href, className, children }) => {
-  const handleClick = (e) => {
-    e.preventDefault(); // ← PREVENIR NAVEGACIÓN AUTOMÁTICA
-
-    if (isPWA && !isOnline) {
-      handleOfflineNavigation(href);
-    } else {
-      // ✅ NAVEGACIÓN ONLINE NORMAL con router
-      console.log(`🌐 Navegación online a: ${href}`);
-      router.push(href);
-    }
-    
-    handleMenuItemClick(); // Cerrar menús
   };
 
-  return (
-    <a href={href} className={className} onClick={handleClick}>
-      {children}
-    </a>
-  );
-};
+// ✅ COMPONENTE LINK MEJORADO - Evitar doble navegación
+  const MenuLink = ({ href, className, children }) => {
+    const handleClick = (e) => {
+      e.preventDefault();
+      e.stopPropagation(); // ✅ Evitar bubbling
+
+      if (isPWA && !isOnline) {
+        // Offline: navegación robusta
+        handleOfflineNavigation(href);
+      } else {
+        // Online: navegación normal
+        setShowMenu(false);
+        setOpenSubMenu(null);
+        
+        setTimeout(() => {
+          router.push(href).catch(() => {
+            window.location.href = href;
+          });
+        }, 50);
+      }
+    };
+
+    return (
+      <a 
+        href="#" 
+        className={className} 
+        onClick={handleClick}
+        onTouchStart={(e) => e.preventDefault()} // ✅ Prevenir touch iOS
+      >
+        {children}
+      </a>
+    );
+  };
 
   useEffect(() => {
     // Obtener rol y datos del empleado
@@ -447,7 +482,7 @@ const MenuLink = ({ href, className, children }) => {
                   transition={{ duration: 0.3, ease: 'easeInOut' }}
                   className="overflow-hidden"
                 >
-                  <MenuLink href="/ventas/RegistrarPedido" className="block py-2 px-4 hover:bg-blue-600 text-white">📱 Registrar Pedido (Universal)</MenuLink>
+                  <MenuLink href="/ventas/RegistrarPedido" className="block py-2 px-4 hover:bg-blue-600 text-white">Registrar Pedido</MenuLink>
                   {isOnline && (
                     <>
                       <MenuLink href="/ventas/HistorialPedidos" className="block py-2 px-4 hover:bg-blue-600 text-white">Modificar Nota de Pedido</MenuLink>
