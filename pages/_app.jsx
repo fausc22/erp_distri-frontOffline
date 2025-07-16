@@ -1,5 +1,6 @@
-// pages/_app.jsx - Versión actualizada con todos los nuevos componentes
+// pages/_app.jsx - Con precarga crítica para navegación offline
 import '../styles/globals.css';
+import { useEffect } from 'react';
 import { AnimatePresence } from 'framer-motion';
 import { Toaster } from 'react-hot-toast'; 
 import { AuthProvider } from '../components/AuthProvider';
@@ -8,6 +9,131 @@ import AppInitializer from '../components/AppInitializer';
 import OfflineGuard from '../components/OfflineGuard';
 
 function MyApp({ Component, pageProps }) {
+  // ✅ PRECARGA CRÍTICA PARA PWA OFFLINE
+  useEffect(() => {
+    // Solo ejecutar en cliente y si hay Service Worker
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      // Detectar si es PWA
+      const isPWA = window.matchMedia('(display-mode: standalone)').matches ||
+                    window.navigator.standalone ||
+                    document.referrer.includes('android-app://');
+
+      if (isPWA) {
+        console.log('📱 PWA detectada, iniciando precarga crítica...');
+        
+        // Precargar recursos críticos para navegación offline
+        const criticalResources = [
+          '/ventas/RegistrarPedido',
+          '/inicio',
+          '/login',
+          '/',
+        ];
+
+        // Precarga con delay para no impactar la carga inicial
+        setTimeout(() => {
+          criticalResources.forEach((url, index) => {
+            setTimeout(() => {
+              fetch(url, { 
+                method: 'GET',
+                credentials: 'include',
+                cache: 'force-cache' // Forzar cache
+              }).then(() => {
+                console.log(`✅ Recurso precargado: ${url}`);
+              }).catch((error) => {
+                console.log(`⚠️ Precarga fallida para: ${url}`, error.message);
+              });
+            }, index * 500); // Espaciar las precargas
+          });
+        }, 2000); // Esperar 2 segundos después de cargar la app
+      }
+
+      // ✅ LISTENER PARA UPDATES DEL SERVICE WORKER
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        console.log('🔄 Service Worker actualizado, recargando página...');
+        window.location.reload();
+      });
+
+      // ✅ REGISTRAR SERVICE WORKER SI NO ESTÁ REGISTRADO
+      navigator.serviceWorker.getRegistration().then((registration) => {
+        if (registration) {
+          console.log('✅ Service Worker ya registrado');
+          
+          // Verificar updates
+          registration.addEventListener('updatefound', () => {
+            console.log('🔄 Nueva versión del Service Worker disponible');
+          });
+        } else {
+          console.log('⚠️ Service Worker no registrado, next-pwa debería manejarlo');
+        }
+      });
+
+      // ✅ PRECARGAR CHUNKS CRÍTICOS DE JAVASCRIPT
+      const precargeCriticalChunks = () => {
+        const links = document.querySelectorAll('link[rel="preload"][as="script"]');
+        links.forEach(link => {
+          if (link.href.includes('ventas') || link.href.includes('pages')) {
+            // Forzar carga de chunks críticos
+            const script = document.createElement('script');
+            script.src = link.href;
+            script.async = true;
+            script.onload = () => console.log(`✅ Chunk precargado: ${link.href}`);
+            script.onerror = () => console.log(`⚠️ Error precargando chunk: ${link.href}`);
+            // No agregar al DOM, solo precargar
+          }
+        });
+      };
+
+      // Precargar chunks después de la carga inicial
+      setTimeout(precargeCriticalChunks, 3000);
+    }
+  }, []);
+
+  // ✅ MANEJO DE ERRORES DE RED GLOBAL
+  useEffect(() => {
+    const handleUnhandledRejection = (event) => {
+      // Capturar errores de red durante navegación offline
+      if (event.reason && event.reason.message && event.reason.message.includes('fetch')) {
+        console.log('🌐 Error de red capturado globalmente:', event.reason.message);
+        event.preventDefault(); // Prevenir que se muestre en consola
+      }
+    };
+
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+    return () => {
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
+  }, []);
+
+  // ✅ DETECCIÓN DE CAMBIOS DE CONECTIVIDAD
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const handleOnline = () => {
+        console.log('🌐 Aplicación volvió online');
+        // Opcional: Verificar updates cuando vuelve online
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistration().then((registration) => {
+            if (registration) {
+              registration.update();
+            }
+          });
+        }
+      };
+
+      const handleOffline = () => {
+        console.log('📴 Aplicación ahora offline');
+      };
+
+      window.addEventListener('online', handleOnline);
+      window.addEventListener('offline', handleOffline);
+
+      return () => {
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
+      };
+    }
+  }, []);
+
   // Permite que cada página defina su propio layout (o ninguno)
   const getLayout = Component.getLayout || ((page) => (
     <DefaultLayout>{page}</DefaultLayout>
@@ -18,7 +144,7 @@ function MyApp({ Component, pageProps }) {
       <AuthProvider>
         {/* ✅ WRAPPER DE INICIALIZACIÓN */}
         <AppInitializer>
-          {/* ✅ PROTECCIÓN OFFLINE */}
+          {/* ✅ PROTECCIÓN OFFLINE (ahora simplificada) */}
           <OfflineGuard>
             <div className="bg-secondary-light dark:bg-primary-dark transition duration-300">
               {getLayout(<Component {...pageProps} />)}
@@ -62,6 +188,17 @@ function MyApp({ Component, pageProps }) {
                     iconTheme: {
                       primary: 'white',
                       secondary: '#ef4444',
+                    },
+                  },
+                  warning: {
+                    duration: 4000,
+                    style: {
+                      background: '#f59e0b',
+                      color: 'white',
+                    },
+                    iconTheme: {
+                      primary: 'white',
+                      secondary: '#f59e0b',
                     },
                   },
                   loading: {

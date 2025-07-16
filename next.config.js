@@ -5,71 +5,81 @@ const withPWA = require('next-pwa')({
   disable: false,
   buildExcludes: [/middleware-manifest\.json$/],
   
-  // ✅ CACHE OBLIGATORIO DE REGISTRAR PEDIDO Y DEPENDENCIAS
+  // ✅ CACHE OBLIGATORIO DE TODAS LAS PÁGINAS CRÍTICAS
   additionalManifestEntries: [
     { url: '/ventas/RegistrarPedido', revision: null },
     { url: '/inicio', revision: null },
     { url: '/login', revision: null },
+    { url: '/', revision: null },
   ],
   
-  // ✅ ESTRATEGIA DE CACHE ROBUSTA PARA PWA OFFLINE
+  // ✅ ESTRATEGIA DE CACHE AGRESIVA PARA OFFLINE
   runtimeCaching: [
     {
-      // ✅ CACHE OBLIGATORIO: RegistrarPedido siempre disponible
-      urlPattern: /^https?:\/\/[^\/]+\/ventas\/RegistrarPedido(\?.*)?$/,
+      // ✅ PÁGINAS PRINCIPALES - CACHE FIRST AGRESIVO
+      urlPattern: /^https?:\/\/[^\/]+\/(ventas\/RegistrarPedido|inicio|login|$)(\?.*)?$/,
       handler: 'CacheFirst',
       options: {
-        cacheName: 'registrar-pedido-page',
-        expiration: {
-          maxEntries: 1,
-          maxAgeSeconds: 60 * 60 * 24 * 30, // 30 días
-        },
-        cacheableResponse: {
-          statuses: [0, 200],
-        },
-      },
-    },
-    {
-      // ✅ CACHE OBLIGATORIO: Páginas principales
-      urlPattern: /^https?:\/\/[^\/]+\/(inicio|login)(\?.*)?$/,
-      handler: 'CacheFirst',
-      options: {
-        cacheName: 'main-pages',
-        expiration: {
-          maxEntries: 5,
-          maxAgeSeconds: 60 * 60 * 24 * 7, // 7 días
-        },
-        cacheableResponse: {
-          statuses: [0, 200],
-        },
-      },
-    },
-    {
-      // ✅ CACHE DE COMPONENTES CRÍTICOS
-      urlPattern: /^https?:\/\/[^\/]+\/_next\/static\/chunks\/pages\/(ventas\/RegistrarPedido|inicio|login).*\.js$/,
-      handler: 'CacheFirst',
-      options: {
-        cacheName: 'critical-page-chunks',
+        cacheName: 'critical-pages',
         expiration: {
           maxEntries: 10,
-          maxAgeSeconds: 60 * 60 * 24 * 30, // 30 días
+          maxAgeSeconds: 60 * 60 * 24 * 365, // 1 año
+        },
+        cacheableResponse: {
+          statuses: [0, 200],
         },
       },
     },
     {
-      // ✅ CACHE DE ASSETS ESTÁTICOS (CSS, JS, imágenes)
+      // ✅ CHUNKS DE JAVASCRIPT CRÍTICOS - CACHE PERMANENTE
+      urlPattern: /^https?:\/\/[^\/]+\/_next\/static\/chunks\/.*/,
+      handler: 'CacheFirst',
+      options: {
+        cacheName: 'js-chunks',
+        expiration: {
+          maxEntries: 100,
+          maxAgeSeconds: 60 * 60 * 24 * 365, // 1 año
+        },
+      },
+    },
+    {
+      // ✅ CSS Y ASSETS ESTÁTICOS - CACHE PERMANENTE
       urlPattern: /^https?:\/\/[^\/]+\/_next\/static\/.*/,
       handler: 'CacheFirst',
       options: {
         cacheName: 'static-assets',
         expiration: {
-          maxEntries: 100,
-          maxAgeSeconds: 60 * 60 * 24 * 30, // 30 días
+          maxEntries: 200,
+          maxAgeSeconds: 60 * 60 * 24 * 365, // 1 año
         },
       },
     },
     {
-      // ✅ CACHE DE FUENTES Y RECURSOS EXTERNOS
+      // ✅ COMPONENTES ESPECÍFICOS DE PEDIDOS
+      urlPattern: /^https?:\/\/[^\/]+\/_next\/static\/chunks\/pages\/(ventas|components).*\.js$/,
+      handler: 'CacheFirst',
+      options: {
+        cacheName: 'pedidos-components',
+        expiration: {
+          maxEntries: 50,
+          maxAgeSeconds: 60 * 60 * 24 * 365, // 1 año
+        },
+      },
+    },
+    {
+      // ✅ MANIFEST Y PWA ASSETS
+      urlPattern: /^https?:\/\/[^\/]+\/(manifest\.json|favicon\.ico|.*\.png)$/,
+      handler: 'CacheFirst',
+      options: {
+        cacheName: 'pwa-assets',
+        expiration: {
+          maxEntries: 20,
+          maxAgeSeconds: 60 * 60 * 24 * 365, // 1 año
+        },
+      },
+    },
+    {
+      // ✅ FUENTES Y RECURSOS EXTERNOS
       urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/,
       handler: 'CacheFirst',
       options: {
@@ -92,32 +102,32 @@ const withPWA = require('next-pwa')({
       },
     },
     {
-      // ✅ ESTRATEGIA PARA API: NetworkFirst con fallback
+      // ✅ API CON FALLBACK OFFLINE INTELIGENTE
       urlPattern: /^https?:\/\/[^\/]+\/api\/.*/,
       handler: 'NetworkFirst',
       options: {
         cacheName: 'api-cache',
         expiration: {
-          maxEntries: 50,
+          maxEntries: 100,
           maxAgeSeconds: 60 * 60 * 24, // 1 día
         },
-        networkTimeoutSeconds: 10,
+        networkTimeoutSeconds: 5, // Timeout rápido
         cacheableResponse: {
           statuses: [0, 200],
         },
       },
     },
     {
-      // ✅ FALLBACK PARA OTRAS PÁGINAS (NetworkFirst)
+      // ✅ FALLBACK GENERAL PARA OTRAS PÁGINAS
       urlPattern: /^https?:\/\/[^\/]+\/(?!api).*/,
       handler: 'NetworkFirst',
       options: {
         cacheName: 'pages-cache',
         expiration: {
-          maxEntries: 20,
+          maxEntries: 50,
           maxAgeSeconds: 60 * 60 * 24 * 7, // 7 días
         },
-        networkTimeoutSeconds: 5,
+        networkTimeoutSeconds: 3, // Timeout muy rápido
       },
     },
   ],
@@ -126,7 +136,7 @@ const withPWA = require('next-pwa')({
 module.exports = withPWA({
   reactStrictMode: true,
   
-  // ✅ HEADERS PARA PWA OFFLINE
+  // ✅ HEADERS PARA CACHE AGRESIVO
   async headers() {
     return [
       {
@@ -139,6 +149,24 @@ module.exports = withPWA({
           {
             key: 'Service-Worker-Allowed',
             value: '/',
+          },
+        ],
+      },
+      {
+        source: '/inicio',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400', // 1 día
+          },
+        ],
+      },
+      {
+        source: '/_next/static/(.*)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
           },
         ],
       },

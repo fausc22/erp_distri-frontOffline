@@ -4,9 +4,10 @@ import { useRouter } from 'next/router';
 import { motion } from 'framer-motion';
 import { FiX, FiMenu, FiWifi, FiWifiOff } from 'react-icons/fi';
 import Head from 'next/head';
+import { toast } from 'react-hot-toast';
 import { getAppMode } from '../utils/offlineManager';
 import { useConnection } from '../utils/ConnectionManager';
-import { LinkGuard } from './OfflineGuard'; // Solo LinkGuard
+import { LinkGuard } from './OfflineGuard';
 
 function AppHeader() {
   const [showMenu, setShowMenu] = useState(false);
@@ -19,10 +20,44 @@ function AppHeader() {
   // ✅ CONNECTION MANAGER (solo para indicadores visuales)
   const { isOnline } = useConnection();
 
-  // ✅ COMPONENTE LINK SIMPLIFICADO - MOVER AL INICIO
+  // ✅ NAVEGACIÓN OFFLINE INTELIGENTE
+  const handleOfflineNavigation = (href) => {
+    // Lista de rutas que SÍ funcionan offline
+    const offlineRoutes = [
+      '/ventas/RegistrarPedido',
+      '/inicio',
+      '/login',
+      '/'
+    ];
+    
+    if (offlineRoutes.includes(href)) {
+      // Navegación segura offline
+      console.log(`🔄 Navegación offline segura a: ${href}`);
+      window.location.href = href;
+    } else {
+      // Mostrar mensaje para rutas no disponibles offline
+      toast.warning('Esta sección requiere conexión a internet', {
+        duration: 3000,
+        icon: '📴'
+      });
+      console.log(`⚠️ Ruta bloqueada offline: ${href}`);
+    }
+  };
+
+  // ✅ COMPONENTE LINK CON NAVEGACIÓN OFFLINE
   const MenuLink = ({ href, className, children }) => {
+    const handleClick = (e) => {
+      if (isPWA && !isOnline) {
+        e.preventDefault();
+        handleOfflineNavigation(href);
+      } else {
+        // Navegación normal online
+        handleMenuItemClick();
+      }
+    };
+
     return (
-      <LinkGuard href={href} className={className} onClick={handleMenuItemClick}>
+      <LinkGuard href={href} className={className} onClick={handleClick}>
         {children}
       </LinkGuard>
     );
@@ -120,9 +155,21 @@ function AppHeader() {
     return isOnline ? 'bg-blue-500' : 'bg-orange-500'; // Azul online, naranja offline
   };
 
+  // ✅ OBTENER ESTILO DE MENÚ SEGÚN DISPONIBILIDAD OFFLINE
+  const getMenuItemStyle = (requiresOnline = false) => {
+    if (!isPWA || isOnline) {
+      return "text-white focus:outline-none font-bold"; // Normal
+    }
+    
+    if (requiresOnline) {
+      return "text-orange-200 focus:outline-none font-bold opacity-60 cursor-not-allowed"; // Deshabilitado
+    }
+    
+    return "text-white focus:outline-none font-bold"; // Disponible offline
+  };
+
   return (
     <>
-      {/* ✅ SIN NAVBARGUARD - SIEMPRE VISIBLE */}
       <nav className={`${getNavbarTheme()} text-white py-4 sticky top-0 z-50 transition-colors duration-300`}>
         <div className="container mx-auto flex justify-between items-center">
           {/* Logo */}
@@ -162,10 +209,14 @@ function AppHeader() {
 
           {/* Menú para pantallas grandes */}
           <div className="hidden sm:flex flex-grow justify-center space-x-6 items-center">
-            {/* VENTAS - SIEMPRE DISPONIBLE */}
+            {/* VENTAS - SIEMPRE DISPONIBLE (RegistrarPedido funciona offline) */}
             {(role === 'GERENTE' || role === 'VENDEDOR') && (
               <motion.div className="relative" variants={menuItemVariants} whileHover="hover" whileTap="tap">
-                <button onClick={() => toggleSubMenu('ventas')} className="text-white focus:outline-none font-bold">
+                <button 
+                  onClick={() => toggleSubMenu('ventas')} 
+                  className={getMenuItemStyle(false)}
+                  disabled={isPWA && !isOnline ? false : false} // Siempre habilitado
+                >
                   VENTAS
                 </button>
                 <motion.div
@@ -176,122 +227,157 @@ function AppHeader() {
                   transition={{ duration: 0.2, ease: 'easeOut' }}
                   style={{ minWidth: '200px' }}
                 >
-                  <MenuLink href="/ventas/RegistrarPedido" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">📱 Registrar Pedido (Universal)</MenuLink>
-                  <MenuLink href="/ventas/HistorialPedidos" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap border-b border-black-200">Modificar Nota de Pedido</MenuLink>
+                  <MenuLink href="/ventas/RegistrarPedido" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">
+                    📱 Registrar Pedido (Universal)
+                  </MenuLink>
+                  <MenuLink href="/ventas/HistorialPedidos" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap border-b border-black-200">
+                    Modificar Nota de Pedido
+                  </MenuLink>
                   {(role === 'GERENTE') && (
                     <>
-                      <MenuLink href="/ventas/ListaPrecios" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">Generar Lista de Precios</MenuLink>
-                      <MenuLink href="/ventas/Facturacion" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap mt-1">Facturación</MenuLink>
+                      <MenuLink href="/ventas/ListaPrecios" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">
+                        Generar Lista de Precios
+                      </MenuLink>
+                      <MenuLink href="/ventas/Facturacion" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap mt-1">
+                        Facturación
+                      </MenuLink>
                     </>
                   )}
                 </motion.div>
               </motion.div>
             )}
 
-            {/* INVENTARIO - Solo cuando online */}
-            {(role === 'GERENTE' || role === 'VENDEDOR') && isOnline && (
+            {/* INVENTARIO - Requiere online */}
+            {(role === 'GERENTE' || role === 'VENDEDOR') && (
               <motion.div className="relative" variants={menuItemVariants} whileHover="hover" whileTap="tap">
-                <button onClick={() => toggleSubMenu('inventario')} className="text-white focus:outline-none font-bold">
+                <button 
+                  onClick={() => isPWA && !isOnline ? null : toggleSubMenu('inventario')} 
+                  className={getMenuItemStyle(true)}
+                  disabled={isPWA && !isOnline}
+                  title={isPWA && !isOnline ? "Requiere conexión a internet" : ""}
+                >
                   INVENTARIO
+                  {isPWA && !isOnline && <span className="ml-1 text-xs">🔒</span>}
                 </button>
+                {isOnline && (
+                  <motion.div
+                    className="absolute top-full left-0 bg-white text-black shadow-md rounded-md p-2 mt-1 origin-top transition duration-200 ease-in-out"
+                    variants={subMenuVariants}
+                    initial="closed"
+                    animate={openSubMenu === 'inventario' ? 'open' : 'closed'}
+                    transition={{ duration: 0.2, ease: 'easeOut' }}
+                    style={{ minWidth: '200px' }}
+                  >
+                    {(role === 'GERENTE') && ( 
+                      <MenuLink href="/inventario/Productos" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">Productos</MenuLink>
+                    )}
+                    <MenuLink href="/inventario/consultaStock" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap border-b border-gray-200">Consulta de STOCK</MenuLink>
+                    <MenuLink href="/inventario/Remitos" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">Remitos</MenuLink>
+                  </motion.div>
+                )}
+              </motion.div>
+            )}
+
+            {/* COMPRAS - Requiere online */}
+            <motion.div className="relative" variants={menuItemVariants} whileHover="hover" whileTap="tap">
+              <button 
+                onClick={() => isPWA && !isOnline ? null : toggleSubMenu('compras')} 
+                className={getMenuItemStyle(true)}
+                disabled={isPWA && !isOnline}
+                title={isPWA && !isOnline ? "Requiere conexión a internet" : ""}
+              >
+                COMPRAS
+                {isPWA && !isOnline && <span className="ml-1 text-xs">🔒</span>}
+              </button>
+              {isOnline && (
                 <motion.div
                   className="absolute top-full left-0 bg-white text-black shadow-md rounded-md p-2 mt-1 origin-top transition duration-200 ease-in-out"
                   variants={subMenuVariants}
                   initial="closed"
-                  animate={openSubMenu === 'inventario' ? 'open' : 'closed'}
+                  animate={openSubMenu === 'compras' ? 'open' : 'closed'}
                   transition={{ duration: 0.2, ease: 'easeOut' }}
                   style={{ minWidth: '200px' }}
                 >
-                  {(role === 'GERENTE') && ( 
-                    <MenuLink href="/inventario/Productos" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">Productos</MenuLink>
+                  {role === 'GERENTE' && (
+                    <MenuLink href="/compras/RegistrarCompra" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">
+                      Registrar Compra
+                    </MenuLink>
                   )}
-                  <MenuLink href="/inventario/consultaStock" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap border-b border-gray-200">Consulta de STOCK</MenuLink>
-                  <MenuLink href="/inventario/Remitos" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">Remitos</MenuLink>
+                  
+                  <MenuLink href="/compras/RegistrarGasto" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap border-b border-gray-200">
+                    Registrar Gasto
+                  </MenuLink>
+                  
+                  {role === 'GERENTE' && (
+                    <MenuLink href="/compras/HistorialCompras" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">
+                      Historial de Compras
+                    </MenuLink>
+                  )}
                 </motion.div>
+              )}
+            </motion.div>
+
+            {/* FINANZAS - Solo gerentes y requiere online */}
+            {role === 'GERENTE' && (
+              <motion.div className="relative" variants={menuItemVariants} whileHover="hover" whileTap="tap">
+                <button 
+                  onClick={() => isPWA && !isOnline ? null : toggleSubMenu('finanzas')} 
+                  className={getMenuItemStyle(true)}
+                  disabled={isPWA && !isOnline}
+                  title={isPWA && !isOnline ? "Requiere conexión a internet" : ""}
+                >
+                  FINANZAS
+                  {isPWA && !isOnline && <span className="ml-1 text-xs">🔒</span>}
+                </button>
+                {isOnline && (
+                  <motion.div
+                    className="absolute top-full left-0 bg-white text-black shadow-md rounded-md p-2 mt-1 origin-top transition duration-200 ease-in-out"
+                    variants={subMenuVariants}
+                    initial="closed"
+                    animate={openSubMenu === 'finanzas' ? 'open' : 'closed'}
+                    transition={{ duration: 0.2, ease: 'easeOut' }}
+                    style={{ minWidth: '200px' }}
+                  >
+                    <MenuLink href="/finanzas/fondos" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">Fondos</MenuLink>
+                    <MenuLink href="/finanzas/ingresos" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">Historial de Ingresos</MenuLink>
+                    <MenuLink href="/finanzas/egresos" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap border-b border-gray-200">Historial de Egresos</MenuLink>
+                    <MenuLink href="/finanzas/reportes" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">Reportes Financieros</MenuLink>
+                  </motion.div>
+                )}
               </motion.div>
             )}
 
-            {/* RESTO DE MENÚS - Solo cuando online */}
-            {isOnline && (
-              <>
-                {/* COMPRAS */}
-                <motion.div className="relative" variants={menuItemVariants} whileHover="hover" whileTap="tap">
-                  <button onClick={() => toggleSubMenu('compras')} className="text-white focus:outline-none font-bold">
-                    COMPRAS
-                  </button>
-                  <motion.div
-                    className="absolute top-full left-0 bg-white text-black shadow-md rounded-md p-2 mt-1 origin-top transition duration-200 ease-in-out"
-                    variants={subMenuVariants}
-                    initial="closed"
-                    animate={openSubMenu === 'compras' ? 'open' : 'closed'}
-                    transition={{ duration: 0.2, ease: 'easeOut' }}
-                    style={{ minWidth: '200px' }}
-                  >
-                    {role === 'GERENTE' && (
-                      <MenuLink href="/compras/RegistrarCompra" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">
-                        Registrar Compra
-                      </MenuLink>
-                    )}
-                    
-                    <MenuLink href="/compras/RegistrarGasto" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap border-b border-gray-200">
-                      Registrar Gasto
-                    </MenuLink>
-                    
-                    {role === 'GERENTE' && (
-                      <MenuLink href="/compras/HistorialCompras" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">
-                        Historial de Compras
-                      </MenuLink>
-                    )}
-                  </motion.div>
+            {/* EDICION - Requiere online */}
+            <motion.div className="relative" variants={menuItemVariants} whileHover="hover" whileTap="tap">
+              <button 
+                onClick={() => isPWA && !isOnline ? null : toggleSubMenu('edicion')} 
+                className={getMenuItemStyle(true)}
+                disabled={isPWA && !isOnline}
+                title={isPWA && !isOnline ? "Requiere conexión a internet" : ""}
+              >
+                EDICION
+                {isPWA && !isOnline && <span className="ml-1 text-xs">🔒</span>}
+              </button>
+              {isOnline && (
+                <motion.div
+                  className="absolute top-full left-0 bg-white text-black shadow-md rounded-md p-2 mt-1 origin-top transition duration-200 ease-in-out"
+                  variants={subMenuVariants}
+                  initial="closed"
+                  animate={openSubMenu === 'edicion' ? 'open' : 'closed'}
+                  transition={{ duration: 0.2, ease: 'easeOut' }}
+                  style={{ minWidth: '200px' }}
+                >
+                  <MenuLink href="/edicion/Clientes" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">Clientes</MenuLink>
+                  
+                  {role === 'GERENTE' && (
+                    <>
+                      <MenuLink href="/edicion/Proveedores" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">Proveedores</MenuLink>
+                      <MenuLink href="/edicion/Empleados" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">Empleados</MenuLink>
+                    </>
+                  )}
                 </motion.div>
-
-                {/* FINANZAS - Solo gerentes */}
-                {role === 'GERENTE' && (
-                  <motion.div className="relative" variants={menuItemVariants} whileHover="hover" whileTap="tap">
-                    <button onClick={() => toggleSubMenu('finanzas')} className="text-white focus:outline-none font-bold">
-                      FINANZAS
-                    </button>
-                    <motion.div
-                      className="absolute top-full left-0 bg-white text-black shadow-md rounded-md p-2 mt-1 origin-top transition duration-200 ease-in-out"
-                      variants={subMenuVariants}
-                      initial="closed"
-                      animate={openSubMenu === 'finanzas' ? 'open' : 'closed'}
-                      transition={{ duration: 0.2, ease: 'easeOut' }}
-                      style={{ minWidth: '200px' }}
-                    >
-                      <MenuLink href="/finanzas/fondos" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">Fondos</MenuLink>
-                      <MenuLink href="/finanzas/ingresos" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">Historial de Ingresos</MenuLink>
-                      <MenuLink href="/finanzas/egresos" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap border-b border-gray-200">Historial de Egresos</MenuLink>
-                      <MenuLink href="/finanzas/reportes" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">Reportes Financieros</MenuLink>
-                    </motion.div>
-                  </motion.div>
-                )}
-
-                {/* EDICION */}
-                <motion.div className="relative" variants={menuItemVariants} whileHover="hover" whileTap="tap">
-                  <button onClick={() => toggleSubMenu('edicion')} className="text-white focus:outline-none font-bold">
-                    EDICION
-                  </button>
-                  <motion.div
-                    className="absolute top-full left-0 bg-white text-black shadow-md rounded-md p-2 mt-1 origin-top transition duration-200 ease-in-out"
-                    variants={subMenuVariants}
-                    initial="closed"
-                    animate={openSubMenu === 'edicion' ? 'open' : 'closed'}
-                    transition={{ duration: 0.2, ease: 'easeOut' }}
-                    style={{ minWidth: '200px' }}
-                  >
-                    <MenuLink href="/edicion/Clientes" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">Clientes</MenuLink>
-                    
-                    {role === 'GERENTE' && (
-                      <>
-                        <MenuLink href="/edicion/Proveedores" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">Proveedores</MenuLink>
-                        <MenuLink href="/edicion/Empleados" className="block py-2 px-4 hover:bg-gray-100 text-sm whitespace-nowrap">Empleados</MenuLink>
-                      </>
-                    )}
-                  </motion.div>
-                </motion.div>
-              </>
-            )}
+              )}
+            </motion.div>
           </div>
 
           {/* ✅ INFORMACIÓN DEL USUARIO */}
@@ -320,7 +406,7 @@ function AppHeader() {
           </div>
         </div>
 
-        {/* ✅ MENU MÓVIL SIMPLIFICADO */}
+        {/* ✅ MENU MÓVIL CON NAVEGACIÓN OFFLINE */}
         {showMenu && (
           <div className="sm:hidden bg-blue-500 py-2 px-4 flex flex-col items-center">
             {/* Información del usuario en móvil */}
@@ -341,7 +427,6 @@ function AppHeader() {
               )}
             </div>
 
-            {/* MENÚS MÓVILES */}
             {/* VENTAS MÓVIL - SIEMPRE DISPONIBLE */}
             {(role === 'GERENTE' || role === 'VENDEDOR') && (
               <div className="w-full mb-2">
@@ -479,6 +564,15 @@ function AppHeader() {
                   </motion.div>
                 </div>
               </>
+            )}
+
+            {/* ✅ MENSAJE INFORMATIVO OFFLINE EN MÓVIL */}
+            {isPWA && !isOnline && (
+              <div className="w-full mb-4 p-3 bg-orange-600 bg-opacity-50 rounded text-center">
+                <p className="text-xs text-orange-100">
+                  🔒 Algunas secciones requieren conexión a internet
+                </p>
+              </div>
             )}
 
             <motion.button
