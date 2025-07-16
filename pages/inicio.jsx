@@ -1,4 +1,4 @@
-// pages/inicio.jsx - Modificado para funcionar solo online
+// pages/inicio.jsx - Modificado con paneles PWA
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import Head from 'next/head';
@@ -8,6 +8,7 @@ import InstallButton from '../components/InstallButton';
 import { useConnection } from '../utils/ConnectionManager';
 import { getAppMode, offlineManager } from '../utils/offlineManager';
 import { LinkGuard } from '../components/OfflineGuard';
+import { useOfflineCatalog, useOfflinePedidos } from '../hooks/useOfflineCatalog';
 
 export default function Inicio() {
   const router = useRouter();
@@ -18,6 +19,22 @@ export default function Inicio() {
   // ✅ CONNECTION MANAGER
   const { isOnline, eventType } = useConnection();
   const isPWA = getAppMode() === 'pwa';
+
+  // ✅ HOOKS PARA PWA
+  const {
+    loading: catalogLoading,
+    needsUpdate,
+    updateCatalogManual,
+    lastUpdateFormatted,
+    getCatalogInfo
+  } = useOfflineCatalog();
+
+  const {
+    hasPendientes,
+    cantidadPendientes,
+    syncPedidosPendientes,
+    syncing
+  } = useOfflinePedidos();
 
   useEffect(() => {
     const checkAuth = () => {
@@ -85,6 +102,29 @@ export default function Inicio() {
     }
   }, [eventType]);
 
+  // ✅ HANDLERS PARA LOS BOTONES PWA
+  const handleUpdateCatalog = async () => {
+    console.log('🔄 Actualizando catálogo manualmente desde inicio...');
+    await updateCatalogManual();
+    
+    // Recargar estadísticas después de actualizar
+    if (isPWA) {
+      const stats = offlineManager.getStorageStats();
+      setCatalogStats(stats);
+    }
+  };
+
+  const handleSyncPedidos = async () => {
+    console.log('🔄 Sincronizando pedidos pendientes desde inicio...');
+    await syncPedidosPendientes();
+    
+    // Recargar estadísticas después de sincronizar
+    if (isPWA) {
+      const stats = offlineManager.getStorageStats();
+      setCatalogStats(stats);
+    }
+  };
+
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return 'Buenos días';
@@ -118,7 +158,7 @@ export default function Inicio() {
         <title>VERTIMAR | INICIO</title>
       </Head>
       
-      {/* ✅ HEADER NORMAL (ya no hay modo offline aquí) */}
+      {/* ✅ HEADER NORMAL */}
       <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg p-6 mb-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
           <div>
@@ -144,6 +184,197 @@ export default function Inicio() {
         </div>
       </div>
 
+      {/* ✅ PANELES PWA - Solo visible si es PWA */}
+      {isPWA && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          
+          {/* ✅ PANEL ACTUALIZAR CATÁLOGO */}
+          <div className={`bg-white rounded-lg shadow-md p-6 transition-all ${
+            !needsUpdate || !isOnline || catalogLoading
+              ? 'opacity-50 cursor-not-allowed' 
+              : 'hover:shadow-lg cursor-pointer'
+          }`}>
+            <div className="flex items-center mb-4">
+              <div className={`p-3 rounded-full ${
+                needsUpdate && isOnline && !catalogLoading
+                  ? 'bg-orange-100' 
+                  : 'bg-gray-100'
+              }`}>
+                <svg 
+                  className={`w-6 h-6 ${
+                    catalogLoading 
+                      ? 'text-gray-500 animate-spin' 
+                      : needsUpdate && isOnline 
+                        ? 'text-orange-600' 
+                        : 'text-gray-400'
+                  }`} 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className={`text-xl font-semibold ${
+                  needsUpdate && isOnline && !catalogLoading
+                    ? 'text-gray-800' 
+                    : 'text-gray-400'
+                }`}>
+                  Actualizar Catálogo
+                </h3>
+                <div className="flex items-center gap-2 mt-1">
+                  <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-orange-500'}`}></div>
+                  <span className="text-xs text-gray-500">
+                    {isOnline ? 'Online' : 'Offline'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="mb-4">
+              <p className={`text-sm mb-2 ${
+                needsUpdate && isOnline && !catalogLoading
+                  ? 'text-gray-600' 
+                  : 'text-gray-400'
+              }`}>
+                {catalogLoading 
+                  ? 'Actualizando catálogo...' 
+                  : needsUpdate 
+                    ? 'Hay actualizaciones disponibles para el catálogo offline'
+                    : 'El catálogo está actualizado'
+                }
+              </p>
+              
+              <div className="text-xs text-gray-500 space-y-1">
+                <p><strong>Última actualización:</strong> {lastUpdateFormatted}</p>
+                {catalogStats && (
+                  <p><strong>Datos locales:</strong> {catalogStats.clientes} clientes, {catalogStats.productos} productos</p>
+                )}
+              </div>
+            </div>
+
+            <button
+              onClick={handleUpdateCatalog}
+              disabled={!needsUpdate || !isOnline || catalogLoading}
+              className={`w-full py-2 px-4 rounded font-medium transition-colors flex items-center justify-center gap-2 ${
+                !needsUpdate || !isOnline || catalogLoading
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-orange-600 hover:bg-orange-700 text-white'
+              }`}
+            >
+              {catalogLoading ? (
+                <>
+                  <svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Actualizando...
+                </>
+              ) : needsUpdate && isOnline ? (
+                'Actualizar Ahora'
+              ) : !isOnline ? (
+                'Sin Conexión'
+              ) : (
+                'Ya Actualizado'
+              )}
+            </button>
+          </div>
+
+          {/* ✅ PANEL IMPORTAR PEDIDOS */}
+          <div className={`bg-white rounded-lg shadow-md p-6 transition-all ${
+            !hasPendientes || !isOnline || syncing
+              ? 'opacity-50 cursor-not-allowed' 
+              : 'hover:shadow-lg cursor-pointer'
+          }`}>
+            <div className="flex items-center mb-4">
+              <div className={`p-3 rounded-full ${
+                hasPendientes && isOnline && !syncing
+                  ? 'bg-green-100' 
+                  : 'bg-gray-100'
+              }`}>
+                <svg 
+                  className={`w-6 h-6 ${
+                    syncing 
+                      ? 'text-gray-500 animate-pulse' 
+                      : hasPendientes && isOnline 
+                        ? 'text-green-600' 
+                        : 'text-gray-400'
+                  }`} 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className={`text-xl font-semibold ${
+                  hasPendientes && isOnline && !syncing
+                    ? 'text-gray-800' 
+                    : 'text-gray-400'
+                }`}>
+                  Importar Pedidos
+                </h3>
+                <div className="flex items-center gap-2 mt-1">
+                  <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500' : 'bg-orange-500'}`}></div>
+                  <span className="text-xs text-gray-500">
+                    {isOnline ? 'Online' : 'Offline'}
+                  </span>
+                </div>
+              </div>
+            </div>
+            
+            <div className="mb-4">
+              <p className={`text-sm mb-2 ${
+                hasPendientes && isOnline && !syncing
+                  ? 'text-gray-600' 
+                  : 'text-gray-400'
+              }`}>
+                {syncing 
+                  ? 'Sincronizando pedidos offline...' 
+                  : hasPendientes 
+                    ? `Tienes ${cantidadPendientes} pedidos guardados offline para sincronizar`
+                    : 'No hay pedidos pendientes de sincronización'
+                }
+              </p>
+              
+              {hasPendientes && (
+                <div className="text-xs text-gray-500 space-y-1">
+                  <p><strong>Pedidos pendientes:</strong> {cantidadPendientes}</p>
+                  <p><strong>Se subirán al servidor:</strong> Inmediatamente</p>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={handleSyncPedidos}
+              disabled={!hasPendientes || !isOnline || syncing}
+              className={`w-full py-2 px-4 rounded font-medium transition-colors flex items-center justify-center gap-2 ${
+                !hasPendientes || !isOnline || syncing
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  : 'bg-green-600 hover:bg-green-700 text-white'
+              }`}
+            >
+              {syncing ? (
+                <>
+                  <svg className="animate-pulse h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  Sincronizando...
+                </>
+              ) : hasPendientes && isOnline ? (
+                `Importar ${cantidadPendientes} Pedidos`
+              ) : !isOnline ? (
+                'Sin Conexión'
+              ) : (
+                'Sin Pedidos Pendientes'
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ✅ PANEL DE ACCESOS ONLINE */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         
@@ -164,7 +395,7 @@ export default function Inicio() {
             </p>
             
             <div className="space-y-2">
-              <LinkGuard href="/offline" className="block text-blue-600 hover:text-blue-800 text-sm">• OFFLINE</LinkGuard>
+              
               <LinkGuard href="/ventas/RegistrarPedido" className="block text-blue-600 hover:text-blue-800 text-sm">• Registrar Nota de Pedido</LinkGuard>
               <LinkGuard href="/ventas/HistorialPedidos" className="block text-blue-600 hover:text-blue-800 text-sm">• Historial de Pedidos</LinkGuard>
               {empleado?.rol === 'GERENTE' && (
@@ -310,7 +541,7 @@ export default function Inicio() {
         <div className="mt-4 pt-4 border-t border-gray-200">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
             <div className="text-gray-600">
-              <strong>Modo:</strong> 🌐 Web Online
+              <strong>Modo:</strong> {isPWA ? '📱 PWA' : '🌐 Web Online'}
             </div>
             <div className="text-gray-600">
               <strong>Estado:</strong> {isOnline ? '✅ Conectado' : '📴 Sin conexión'}

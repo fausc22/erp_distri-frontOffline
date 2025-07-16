@@ -1,4 +1,4 @@
-// utils/ConnectionManager.js - Monitor Simplificado para Redirección a Página Offline
+// utils/ConnectionManager.js - SIN REDIRECCIONES AUTOMÁTICAS
 import { toast } from 'react-hot-toast';
 import { getAppMode } from './offlineManager';
 
@@ -9,7 +9,6 @@ class ConnectionManager {
     this.checkInterval = null;
     this.isTransitioning = false;
     this.reconnectionAttempts = 0;
-    this.maxReconnectionAttempts = 3;
     
     this.isPWA = getAppMode() === 'pwa';
     
@@ -20,7 +19,7 @@ class ConnectionManager {
   }
 
   init() {
-    console.log('🔌 ConnectionManager iniciado para redirección a página offline');
+    console.log('🔌 ConnectionManager iniciado - SIN redirecciones automáticas');
     
     // Listeners nativos del navegador
     window.addEventListener('online', this.handleOnline.bind(this));
@@ -40,7 +39,7 @@ class ConnectionManager {
     console.log(`🌐 Estado inicial de conexión: ${this.isOnline ? 'ONLINE' : 'OFFLINE'}`);
   }
 
-  // ✅ GESTIÓN DE EVENTOS DE CONECTIVIDAD
+  // ✅ GESTIÓN DE EVENTOS SIN REDIRECCIONES
   handleOnline() {
     console.log('🌐 Evento ONLINE detectado');
     
@@ -60,7 +59,6 @@ class ConnectionManager {
     }
   }
 
-  // ✅ MANEJO DE REACTIVACIÓN DE PWA
   handleVisibilityChange() {
     if (document.visibilityState === 'visible' && this.isPWA) {
       console.log('👁️ PWA reactivada, verificando conectividad...');
@@ -79,22 +77,21 @@ class ConnectionManager {
     }
   }
 
-  // ✅ VERIFICACIÓN INTELIGENTE DE CONEXIÓN ROBUSTA
+  // ✅ VERIFICACIÓN DE CONEXIÓN SIN REDIRECCIONES
   async verifyConnection() {
     const wasOnline = this.isOnline;
     let connectionWorks = false;
     
-    // ✅ MÚLTIPLES INTENTOS CON DIFERENTES ENDPOINTS
     const endpoints = [
       `${process.env.NEXT_PUBLIC_API_URL}/health`,
-      'https://8.8.8.8', // Google DNS como fallback
+      'https://8.8.8.8',
     ];
     
     for (let attempt = 0; attempt < 2; attempt++) {
       for (const endpoint of endpoints) {
         try {
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 segundos
+          const timeoutId = setTimeout(() => controller.abort(), 10000);
           
           const response = await fetch(endpoint, {
             method: 'GET',
@@ -117,16 +114,11 @@ class ConnectionManager {
       }
       
       if (connectionWorks) break;
-      
-      // Esperar 2 segundos antes del siguiente intento
-      if (attempt < 1) {
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
     
     this.isOnline = connectionWorks;
     
-    // Solo cambiar estado si realmente cambió
     if (!wasOnline && this.isOnline) {
       this.handleConnectionRestored();
     } else if (wasOnline && !this.isOnline) {
@@ -134,89 +126,43 @@ class ConnectionManager {
     }
   }
 
-  // ✅ MANEJO DE PÉRDIDA DE CONEXIÓN - SIMPLIFICADO
+  // ✅ MANEJO SIN REDIRECCIONES - SOLO NOTIFICACIONES
   handleConnectionLost() {
     if (this.isTransitioning) return;
     
-    console.log('📴 Manejando pérdida de conexión...');
+    console.log('📴 Conexión perdida - MODO OFFLINE activado');
     this.isTransitioning = true;
     
-    const currentPath = window.location.pathname;
-    
-    // ✅ SI YA ESTÁ EN LA PÁGINA OFFLINE, NO HACER NADA
-    if (currentPath === '/offline') {
-      console.log('📱 Ya está en página offline, no redirigir');
-      this.notifyListeners('connection_lost_already_offline', {
-        isOnline: false,
-        currentPath
-      });
-      
-      setTimeout(() => {
-        this.isTransitioning = false;
-      }, 1000);
-      return;
-    }
-    
-    // ✅ REDIRIGIR A PÁGINA OFFLINE SIEMPRE
-    console.log('🏠 Redirigiendo a página offline dedicada');
-    
+    // Solo toast informativo - SIN redirección
     toast.error('📴 Sin conexión - Modo offline activado', {
-      duration: 2000
+      duration: 3000,
+      icon: '📱'
     });
     
-    // Notificar antes de redirigir
-    this.notifyListeners('connection_lost_redirect', {
+    this.notifyListeners('connection_lost', {
       isOnline: false,
-      redirectTo: '/offline'
+      message: 'Modo offline activado'
     });
-    
-    // ✅ REDIRECCIÓN INMEDIATA Y ROBUSTA
-    setTimeout(() => {
-      window.location.href = '/offline';
-    }, 500);
     
     setTimeout(() => {
       this.isTransitioning = false;
-    }, 2000);
+    }, 1000);
   }
 
-  // ✅ MANEJO DE RESTAURACIÓN DE CONEXIÓN - SIMPLIFICADO
   handleConnectionRestored() {
     if (this.isTransitioning) return;
     
-    console.log('🌐 Manejando restauración de conexión...');
+    console.log('🌐 Conexión restaurada - MODO ONLINE activado');
     this.isTransitioning = true;
     
-    const currentPath = window.location.pathname;
-    
-    // ✅ SI ESTÁ EN PÁGINA OFFLINE, SOLO NOTIFICAR (NO REDIRIGIR)
-    if (currentPath === '/offline') {
-      console.log('📱 En página offline, mostrando botón de reconexión');
-      
-      // NO mostrar toast aquí - lo maneja la página offline
-      
-      // Notificar a la página offline para mostrar botón
-      this.notifyListeners('connection_restored_show_button', {
-        isOnline: true,
-        currentPath
-      });
-      
-      setTimeout(() => {
-        this.isTransitioning = false;
-      }, 1000);
-      return;
-    }
-    
-    // ✅ SI ESTÁ EN CUALQUIER OTRA PÁGINA, NOTIFICAR NORMALMENTE
-    console.log('🌐 En página online, notificando restauración');
-    
-    toast.success('🌐 Conexión restaurada', {
-      duration: 2000
+    toast.success('🌐 Conexión restaurada - Modo online activado', {
+      duration: 3000,
+      icon: '🌐'
     });
     
-    this.notifyListeners('connection_restored_normal', {
+    this.notifyListeners('connection_restored', {
       isOnline: true,
-      currentPath
+      message: 'Modo online activado'
     });
     
     setTimeout(() => {
@@ -230,7 +176,6 @@ class ConnectionManager {
       clearInterval(this.checkInterval);
     }
     
-    // Verificar cada 45 segundos (no muy agresivo)
     this.checkInterval = setInterval(() => {
       if (document.visibilityState === 'visible') {
         this.verifyConnection();
@@ -243,10 +188,7 @@ class ConnectionManager {
   // ✅ SISTEMA DE LISTENERS
   addListener(callback) {
     this.listeners.add(callback);
-    
-    return () => {
-      this.listeners.delete(callback);
-    };
+    return () => this.listeners.delete(callback);
   }
 
   notifyListeners(eventType, data) {
@@ -276,7 +218,6 @@ class ConnectionManager {
     return this.verifyConnection();
   }
 
-  // ✅ CLEANUP
   destroy() {
     console.log('🧹 Destruyendo ConnectionManager');
     
@@ -294,7 +235,6 @@ class ConnectionManager {
     this.listeners.clear();
   }
 
-  // ✅ MÉTODOS DE UTILIDAD
   waitForConnection(timeout = 10000) {
     return new Promise((resolve, reject) => {
       if (this.isOnline) {
@@ -317,7 +257,6 @@ class ConnectionManager {
     });
   }
 
-  // ✅ INFORMACIÓN DE DEBUG
   getDebugInfo() {
     return {
       isOnline: this.isOnline,
@@ -334,7 +273,7 @@ class ConnectionManager {
 // ✅ EXPORTAR INSTANCIA SINGLETON
 export const connectionManager = new ConnectionManager();
 
-// ✅ HOOK PARA USAR EN COMPONENTES - SIMPLIFICADO
+// ✅ HOOK SIMPLIFICADO SIN REDIRECCIONES
 import { useState, useEffect } from 'react';
 
 export function useConnection() {
@@ -343,7 +282,6 @@ export function useConnection() {
   );
 
   useEffect(() => {
-    // Listener para cambios de conectividad
     const unsubscribe = connectionManager.addListener((eventType, data) => {
       setConnectionState({
         isOnline: data.isOnline,
@@ -354,9 +292,7 @@ export function useConnection() {
       });
     });
 
-    // Estado inicial
     setConnectionState(connectionManager.getConnectionState());
-
     return unsubscribe;
   }, []);
 
