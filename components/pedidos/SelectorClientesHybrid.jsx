@@ -33,7 +33,7 @@ function ModalClientes({ resultados, onSeleccionar, onCerrar, loading, isPWA, is
             <li className="text-gray-500 text-center py-4">
               <div className="flex items-center justify-center">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
-                Buscando{isPWA && !isOnline ? ' offline' : ''}...
+                Buscando...
               </div>
             </li>
           ) : resultados.length > 0 ? (
@@ -85,14 +85,7 @@ function DetallesClienteListaPrecios({ cliente, isPWA, isOnline }) {
       >
         <div className="flex items-center gap-2">
           <p><strong>Cliente:</strong> {cliente.nombre || '-'}</p>
-          {/* ✅ BADGE DE ORIGEN DEL DATO */}
-          {isPWA && (
-            <span className={`text-xs px-2 py-1 rounded ${
-              isOnline ? 'bg-green-600' : 'bg-orange-600'
-            }`}>
-              {isOnline ? 'Online' : 'Offline'}
-            </span>
-          )}
+          
         </div>
         {expandido ? (
           <MdKeyboardArrowUp size={24} />
@@ -111,14 +104,7 @@ function DetallesClienteListaPrecios({ cliente, isPWA, isOnline }) {
           <p><strong>CUIT:</strong> {cliente.cuit || '-'}</p>
           <p><strong>Condición IVA:</strong> {cliente.condicion_iva || '-'}</p>
           
-          {/* ✅ INFORMACIÓN DE DEBUG PARA PWA */}
-          {isPWA && (
-            <div className="mt-2 pt-2 border-t border-blue-600">
-              <p className="text-xs text-blue-200">
-                📱 PWA - Origen: {isOnline ? 'Servidor' : 'Cache local'}
-              </p>
-            </div>
-          )}
+          
         </div>
       )}
     </div>
@@ -256,12 +242,7 @@ export default function ClienteSelectorHybrid() {
           )}
         </div>
 
-        {/* ✅ MENSAJE INFORMATIVO PARA PWA OFFLINE */}
-        {isPWA && !isOnline && (
-          <div className="text-sm text-orange-200 bg-orange-800 bg-opacity-50 p-2 rounded">
-            📱 Búsqueda offline: Solo se mostrarán clientes guardados localmente
-          </div>
-        )}
+        
       </div>
 
       <DetallesClienteListaPrecios 

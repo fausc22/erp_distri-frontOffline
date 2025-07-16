@@ -289,7 +289,7 @@ function AppHeader() {
                     className="block py-2 px-4 text-sm whitespace-nowrap"
                     requiresOnline={false}
                   >
-                    📱 Registrar Pedido (Universal)
+                    Registrar Pedido 
                   </MenuLink>
                   <MenuLink 
                     href="/ventas/HistorialPedidos" 
@@ -531,11 +531,7 @@ function AppHeader() {
             <div className="text-right text-sm">
               <p className="font-medium">{getUserName()}</p>
               <p className={`text-xs ${isOnline ? 'text-blue-200' : 'text-orange-200'}`}>{role}</p>
-              {isPWA && (
-                <p className={`text-xs ${isOnline ? 'text-blue-200' : 'text-orange-200'}`}>
-                  📱 PWA {isOnline ? '(Online)' : '(Offline)'}
-                </p>
-              )}
+              
             </div>
             
             {/* Cerrar sesión */}
@@ -567,7 +563,7 @@ function AppHeader() {
                   ) : (
                     <FiWifiOff className="text-orange-300" size={14} />
                   )}
-                  <span className="text-xs">📱 PWA {isOnline ? 'Online' : 'Offline'}</span>
+                  
                 </div>
               )}
             </div>

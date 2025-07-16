@@ -146,10 +146,7 @@ function RegistrarPedidoContent() {
       if (estado.observaciones) itemsRestaurados.push('observaciones');
       
       if (itemsRestaurados.length > 0) {
-        toast.success(`🔄 Estado restaurado: ${itemsRestaurados.join(', ')}`, {
-          duration: 4000,
-          icon: '💾'
-        });
+        
       }
       
       return true;
@@ -272,11 +269,7 @@ function RegistrarPedidoContent() {
           itemsRestored.push(`${savedData.productos.length} productos`);
         }
         
-        if (itemsRestored.length > 0) {
-          toast.success(`📄 Backup restaurado: ${itemsRestored.join(', ')}`, {
-            duration: 4000
-          });
-        }
+        
         
         clearSavedForm();
         formRestaurado.current = true;
@@ -362,17 +355,11 @@ function RegistrarPedidoContent() {
         } else if (hayConexion && modoForzadoOffline) {
           // ✅ HAY CONEXIÓN pero estamos en modo forzado: Solo toast offline
           console.log('🔒 [RegistrarPedido] Conexión disponible pero modo forzado - Solo toast offline');
-          toast.success('📱 Pedido guardado offline - Se subirá cuando vayas al menú', {
-            duration: 4000,
-            icon: '📱'
-          });
+          
         } else {
           // ✅ SIN CONEXIÓN: Toast normal de offline
           console.log('📴 [RegistrarPedido] Sin conexión - Toast offline normal');
-          toast.success('📱 Pedido guardado offline - Se subirá cuando haya conexión', {
-            duration: 4000,
-            icon: '📱'
-          });
+          
         }
       } else {
         // ✅ PEDIDO ONLINE: Toast normal
@@ -428,10 +415,7 @@ function RegistrarPedidoContent() {
     // ✅ GUARDAR NUEVA CONFIGURACIÓN
     guardarEstadoCompleto();
     
-    toast.success('📱 Modo offline estable activado - Sin interrupciones automáticas', {
-      duration: 4000,
-      icon: '🔒'
-    });
+    
   };
 
   // ✅ MANEJAR "VOLVER AL INICIO" CON VERIFICACIÓN
@@ -469,10 +453,7 @@ function RegistrarPedidoContent() {
       console.log('📴 [RegistrarPedido] Sin conexión para salir - Manteniendo en formulario offline');
       setLoadingConexion(false);
       
-      toast.error('📴 Sin conexión - No se puede acceder al menú. Continúa trabajando offline.', {
-        duration: 4000,
-        icon: '📴'
-      });
+      
     }
   };
 
@@ -523,23 +504,23 @@ function RegistrarPedidoContent() {
     if (!isPWA) return 'NUEVO PEDIDO';
     
     if (modoForzadoOffline) {
-      return '🔒 NUEVO PEDIDO (MODO OFFLINE ESTABLE)';
+      return ' NUEVO PEDIDO OFFLINE';
     }
     
     return interfaceState.showAsOffline 
-      ? '📱 NUEVO PEDIDO (OFFLINE)'
-      : '🌐 NUEVO PEDIDO (ONLINE)';
+      ? 'NUEVO PEDIDO OFFLINE'
+      : 'NUEVO PEDIDO ';
   };
 
   const getHeaderSubtitle = () => {
     if (!isPWA) return 'Sistema de gestión de pedidos';
     
     if (modoForzadoOffline) {
-      return 'Modo offline estable - Estado persistente durante cambios de conexión';
+      return 'Modo offline ';
     }
     
     return interfaceState.showAsOffline
-      ? 'Sistema independiente para registro sin conexión'
+      ? 'Modo offline'
       : 'Sistema de gestión de pedidos';
   };
 
@@ -586,10 +567,10 @@ function RegistrarPedidoContent() {
                     interfaceState.showAsOffline ? 'text-orange-200' : 'text-green-200'
                   }`}>
                     {modoForzadoOffline 
-                      ? '🔒 Estado persistente - Inmune a cambios de conexión'
+                      ? 'MODO OFFLINE'
                       : interfaceState.showAsOffline 
-                        ? '📴 Offline - Estado guardado automáticamente'
-                        : '🌐 Online - Estado sincronizado'
+                        ? 'MODO OFFLINE'
+                        : 'MODO ONLINE'
                     }
                   </span>
                 </div>
@@ -605,7 +586,7 @@ function RegistrarPedidoContent() {
                     setModoForzadoOffline(false);
                     setInterfazLocked(false);
                     guardarEstadoCompleto(); // Guardar cambio
-                    toast.success('🌐 Modo online reactivado - Estado preservado', { duration: 3000 });
+                    
                   }}
                   className="mb-2 bg-white bg-opacity-20 hover:bg-opacity-30 px-3 py-1 rounded text-sm transition-colors"
                 >
@@ -625,48 +606,7 @@ function RegistrarPedidoContent() {
           </div>
         </div>
 
-        {/* ✅ INFORMACIÓN PWA OFFLINE CON PERSISTENCIA */}
-        {isPWA && interfaceState.showAsOffline && catalogStats && (
-          <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 mb-6">
-            <h3 className="font-semibold text-orange-800 mb-2 flex items-center gap-2">
-              📦 Catálogo Offline Disponible
-              {modoForzadoOffline && (
-                <span className="bg-orange-200 text-orange-800 px-2 py-1 rounded text-xs font-medium">
-                  💾 ESTADO PERSISTENTE
-                </span>
-              )}
-            </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              <div>
-                <span className="text-orange-600 font-medium">Clientes:</span>
-                <div className="text-orange-800 font-bold">{catalogStats.clientes}</div>
-              </div>
-              <div>
-                <span className="text-orange-600 font-medium">Productos:</span>
-                <div className="text-orange-800 font-bold">{catalogStats.productos}</div>
-              </div>
-              <div>
-                <span className="text-orange-600 font-medium">Pendientes:</span>
-                <div className="text-orange-800 font-bold">{catalogStats.pedidosPendientes}</div>
-              </div>
-              <div>
-                <span className="text-orange-600 font-medium">Storage:</span>
-                <div className="text-orange-800 font-bold">{catalogStats.storageUsed?.mb}MB</div>
-              </div>
-            </div>
-            
-            {catalogStats.pedidosPendientes > 0 && (
-              <div className="mt-2 text-sm text-orange-700">
-                💡 Los pedidos pendientes se sincronizarán automáticamente cuando vayas al menú
-              </div>
-            )}
-            
-            <div className="mt-2 text-sm text-orange-700 font-medium bg-orange-100 p-2 rounded">
-              💾 <strong>Persistencia activa:</strong> Tu formulario se mantiene intacto durante cambios de conectividad. 
-              Estado guardado automáticamente cada 30 segundos.
-            </div>
-          </div>
-        )}
+        
         
         {/* ✅ SELECTORES HÍBRIDOS (funcionan online/offline automáticamente) */}
         <div className="flex flex-col md:flex-row gap-6">
@@ -688,20 +628,7 @@ function RegistrarPedidoContent() {
             <div className="text-lg font-semibold text-gray-800">
               <p>Total de productos: <span className="text-blue-600">{totalProductos}</span></p>
               <p>Total del pedido: <span className="text-green-600">${total.toFixed(2)}</span></p>
-              <p className="text-sm text-gray-600 mt-1">
-                Modo: <span className={`font-medium ${
-                  interfaceState.showAsOffline ? 'text-orange-600' : 'text-blue-600'
-                }`}>
-                  {modoForzadoOffline 
-                    ? '💾 PWA Offline Persistente (inmune a reconexiones)'
-                    : interfaceState.showAsOffline 
-                      ? '📱 PWA Offline (estado auto-guardado)'
-                      : isPWA
-                        ? '🌐 PWA Online (estado sincronizado)'
-                        : '🌐 Web Online'
-                  }
-                </span>
-              </p>
+              
             </div>
           </div>
           
@@ -727,7 +654,7 @@ function RegistrarPedidoContent() {
                 </div>
               ) : (
                 interfaceState.showAsOffline 
-                  ? '📱 Guardar Pedido Offline'
+                  ? 'Guardar Pedido Offline'
                   : 'Confirmar Pedido'
               )}
             </button>
@@ -756,45 +683,7 @@ function RegistrarPedidoContent() {
           </div>
         </div>
 
-        {/* ✅ INFORMACIÓN ADICIONAL CON PERSISTENCIA */}
-        {isPWA && interfaceState.showAsOffline && (
-          <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <h4 className="font-semibold text-yellow-800 mb-2">
-              ℹ️ Sistema de Persistencia Ultra Estable
-            </h4>
-            <div className="text-yellow-700 text-sm space-y-1">
-              <p>• <strong>💾 Auto-guardado:</strong> Estado completo guardado cada 30 segundos automáticamente</p>
-              <p>• <strong>🔄 Inmune a reconexiones:</strong> Los datos se mantienen durante cambios de conectividad</p>
-              <p>• <strong>📱 Persistencia dual:</strong> Sistema principal + backup de emergencia</p>
-              <p>• <strong>⚡ Restauración instantánea:</strong> Estado recuperado automáticamente al recargar</p>
-              {modoForzadoOffline ? (
-                <>
-                  <p>• <strong>🔒 Modo bloqueado:</strong> Inmune a cambios automáticos hasta que lo desbloquees</p>
-                  <p>• <strong>🌐 Reconexiones ignoradas:</strong> Mantiene modo offline aunque haya internet</p>
-                  <p>• <strong>🎯 Control total:</strong> Solo tú decides cuándo activar el modo online</p>
-                </>
-              ) : (
-                <p>• <strong>🔄 Transiciones suaves:</strong> Estado preservado durante cambios online/offline</p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ✅ INFORMACIÓN DE DEBUG EN DESARROLLO */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
-            <h4 className="font-semibold text-gray-800 mb-2">🔧 Debug - Estado de Persistencia</h4>
-            <div className="text-gray-700 text-xs space-y-1">
-              <p><strong>Estado inicializado:</strong> {estadoInicializado ? '✅ Sí' : '❌ No'}</p>
-              <p><strong>Formulario restaurado:</strong> {formRestaurado.current ? '✅ Sí' : '❌ No'}</p>
-              <p><strong>Último estado conexión:</strong> {ultimoEstadoConexion ? 'Online' : 'Offline'}</p>
-              <p><strong>Estado actual conexión:</strong> {isOnline ? 'Online' : 'Offline'}</p>
-              <p><strong>Modo forzado offline:</strong> {modoForzadoOffline ? '✅ Activo' : '❌ Inactivo'}</p>
-              <p><strong>Interfaz bloqueada:</strong> {interfazLocked ? '🔒 Bloqueada' : '🔓 Libre'}</p>
-              <p><strong>Items en formulario:</strong> Cliente: {cliente ? '✅' : '❌'}, Productos: {productos.length}, Observaciones: {observaciones.length} chars</p>
-            </div>
-          </div>
-        )}
+        
       </div>
       
       {/* ✅ MODAL DE CONFIRMACIÓN UNIVERSAL */}

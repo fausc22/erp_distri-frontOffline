@@ -151,14 +151,14 @@ function MyApp({ Component, pageProps }) {
               
               {/* ✅ TOASTER MEJORADO PARA PWA */}
               <Toaster
-                position="top-right"
+                position="top-left"
                 containerStyle={{
                   top: 20,
                   right: 20,
                   zIndex: 9999,
                 }}
                 toastOptions={{
-                  duration: 4000,
+                  duration: 2000,
                   className: 'pwa-toast',
                   style: {
                     background: '#363636',
@@ -169,7 +169,7 @@ function MyApp({ Component, pageProps }) {
                     boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
                   },
                   success: {
-                    duration: 3000,
+                    duration: 2000,
                     style: {
                       background: '#10b981',
                       color: 'white',
@@ -180,7 +180,7 @@ function MyApp({ Component, pageProps }) {
                     },
                   },
                   error: {
-                    duration: 5000,
+                    duration: 3000,
                     style: {
                       background: '#ef4444',
                       color: 'white',
@@ -191,7 +191,7 @@ function MyApp({ Component, pageProps }) {
                     },
                   },
                   warning: {
-                    duration: 4000,
+                    duration: 2000,
                     style: {
                       background: '#f59e0b',
                       color: 'white',
@@ -209,7 +209,7 @@ function MyApp({ Component, pageProps }) {
                     },
                   },
                   custom: {
-                    duration: 4000,
+                    duration: 2000,
                   },
                   ariaProps: {
                     role: 'status',

@@ -149,13 +149,7 @@ function ModalProductos({
                       Stock: {producto.stock_actual}
                     </span>
                     {/* ✅ BADGE DE ORIGEN PARA CADA PRODUCTO */}
-                    {isPWA && (
-                      <div className={`text-xs px-1 py-0.5 rounded mt-1 ${
-                        isOnline ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
-                      }`}>
-                        {isOnline ? 'Online' : 'Cache'}
-                      </div>
-                    )}
+                    
                   </div>
                 </div>
               </li>
@@ -302,12 +296,7 @@ export default function ProductoSelectorHybrid() {
         </button>
       </div>
 
-      {/* ✅ MENSAJE INFORMATIVO PARA PWA OFFLINE */}
-      {isPWA && !isOnline && (
-        <div className="text-sm text-orange-200 bg-orange-600 bg-opacity-50 p-2 rounded">
-          📱 Búsqueda offline: Solo productos guardados localmente
-        </div>
-      )}
+      
 
       {mostrarModal && (
         <ModalProductos
